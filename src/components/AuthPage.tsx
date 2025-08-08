@@ -12,10 +12,22 @@ interface AuthPageProps {
 
 export default function AuthPage({ onAuthenticated }: AuthPageProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState("login");
+  
+  // Login state
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  
+  // Register state
+  const [registerData, setRegisterData] = useState({
+    firstName: "",
+    lastName: "",
+    company: "",
+    email: "",
+    password: ""
+  });
 
-  const handleAuth = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     try {
@@ -24,14 +36,37 @@ export default function AuthPage({ onAuthenticated }: AuthPageProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
-      if (!res.ok) throw new Error("Auth failed");
+      if (!res.ok) throw new Error("Login failed");
       await res.json();
       onAuthenticated();
     } catch (err) {
-      console.error(err);
+      console.error("Login error:", err);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    try {
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(registerData),
+      });
+      if (!res.ok) throw new Error("Registration failed");
+      await res.json();
+      onAuthenticated();
+    } catch (err) {
+      console.error("Registration error:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const updateRegisterField = (field: string, value: string) => {
+    setRegisterData(prev => ({ ...prev, [field]: value }));
   };
 
   return (
@@ -49,7 +84,7 @@ export default function AuthPage({ onAuthenticated }: AuthPageProps) {
         </div>
 
         <Card className="shadow-elegant bg-gradient-card border-0">
-          <Tabs defaultValue="login" className="w-full">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <CardHeader className="space-y-4">
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="login">Sign In</TabsTrigger>
@@ -58,14 +93,14 @@ export default function AuthPage({ onAuthenticated }: AuthPageProps) {
             </CardHeader>
 
             <TabsContent value="login">
-              <form onSubmit={handleAuth}>
+              <form onSubmit={handleLogin}>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
+                    <Label htmlFor="login-email">Email</Label>
                     <div className="relative">
                       <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                       <Input 
-                        id="email" 
+                        id="login-email" 
                         type="email" 
                         placeholder="Enter your email"
                         className="pl-10"
@@ -76,11 +111,11 @@ export default function AuthPage({ onAuthenticated }: AuthPageProps) {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="password">Password</Label>
+                    <Label htmlFor="login-password">Password</Label>
                     <div className="relative">
                       <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                       <Input 
-                        id="password" 
+                        id="login-password" 
                         type="password" 
                         placeholder="Enter your password"
                         className="pl-10"
@@ -107,7 +142,7 @@ export default function AuthPage({ onAuthenticated }: AuthPageProps) {
             </TabsContent>
 
             <TabsContent value="register">
-              <form onSubmit={handleAuth}>
+              <form onSubmit={handleRegister}>
                 <CardContent className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
@@ -118,6 +153,8 @@ export default function AuthPage({ onAuthenticated }: AuthPageProps) {
                           id="firstName" 
                           placeholder="John"
                           className="pl-10"
+                          value={registerData.firstName}
+                          onChange={(e) => updateRegisterField("firstName", e.target.value)}
                           required
                         />
                       </div>
@@ -127,6 +164,8 @@ export default function AuthPage({ onAuthenticated }: AuthPageProps) {
                       <Input 
                         id="lastName" 
                         placeholder="Doe"
+                        value={registerData.lastName}
+                        onChange={(e) => updateRegisterField("lastName", e.target.value)}
                         required
                       />
                     </div>
@@ -139,32 +178,38 @@ export default function AuthPage({ onAuthenticated }: AuthPageProps) {
                         id="company" 
                         placeholder="Your company name"
                         className="pl-10"
+                        value={registerData.company}
+                        onChange={(e) => updateRegisterField("company", e.target.value)}
                         required
                       />
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
+                    <Label htmlFor="register-email">Email</Label>
                     <div className="relative">
                       <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                       <Input 
-                        id="email" 
+                        id="register-email" 
                         type="email" 
                         placeholder="Enter your email"
                         className="pl-10"
+                        value={registerData.email}
+                        onChange={(e) => updateRegisterField("email", e.target.value)}
                         required
                       />
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="password">Password</Label>
+                    <Label htmlFor="register-password">Password</Label>
                     <div className="relative">
                       <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                       <Input 
-                        id="password" 
+                        id="register-password" 
                         type="password" 
                         placeholder="Create a password"
                         className="pl-10"
+                        value={registerData.password}
+                        onChange={(e) => updateRegisterField("password", e.target.value)}
                         required
                       />
                     </div>
