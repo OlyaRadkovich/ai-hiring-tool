@@ -12,16 +12,26 @@ interface AuthPageProps {
 
 export default function AuthPage({ onAuthenticated }: AuthPageProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    
-    // Simulate authentication
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      if (!res.ok) throw new Error("Auth failed");
+      await res.json();
       onAuthenticated();
-    }, 1500);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -59,6 +69,8 @@ export default function AuthPage({ onAuthenticated }: AuthPageProps) {
                         type="email" 
                         placeholder="Enter your email"
                         className="pl-10"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
                         required
                       />
                     </div>
@@ -72,6 +84,8 @@ export default function AuthPage({ onAuthenticated }: AuthPageProps) {
                         type="password" 
                         placeholder="Enter your password"
                         className="pl-10"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
                         required
                       />
                     </div>
