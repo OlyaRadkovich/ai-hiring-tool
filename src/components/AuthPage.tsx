@@ -12,6 +12,7 @@ interface AuthPageProps {
 
 export default function AuthPage({ onAuthenticated }: AuthPageProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("login");
   
   // Login state
@@ -30,17 +31,24 @@ export default function AuthPage({ onAuthenticated }: AuthPageProps) {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setError("");
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
-      if (!res.ok) throw new Error("Login failed");
-      await res.json();
+      
+      const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data.detail || "Login failed");
+      }
+      
       onAuthenticated();
     } catch (err) {
       console.error("Login error:", err);
+      setError(err instanceof Error ? err.message : "Login failed");
     } finally {
       setIsLoading(false);
     }
@@ -49,17 +57,28 @@ export default function AuthPage({ onAuthenticated }: AuthPageProps) {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setError("");
+    
     try {
+      console.log("Sending registration data:", registerData);
+      
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(registerData),
       });
-      if (!res.ok) throw new Error("Registration failed");
-      await res.json();
+      
+      const data = await res.json();
+      console.log("Registration response:", data);
+      
+      if (!res.ok) {
+        throw new Error(data.detail || "Registration failed");
+      }
+      
       onAuthenticated();
     } catch (err) {
       console.error("Registration error:", err);
+      setError(err instanceof Error ? err.message : "Registration failed");
     } finally {
       setIsLoading(false);
     }
@@ -84,13 +103,19 @@ export default function AuthPage({ onAuthenticated }: AuthPageProps) {
         </div>
 
         <Card className="shadow-elegant bg-gradient-card border-0">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <Tabs value={activeTab} onValueChange={(tab) => { setActiveTab(tab); setError(""); }} className="w-full">
             <CardHeader className="space-y-4">
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="login">Sign In</TabsTrigger>
                 <TabsTrigger value="register">Sign Up</TabsTrigger>
               </TabsList>
             </CardHeader>
+
+            {error && (
+              <div className="px-6 py-3 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-red-600 text-sm">{error}</p>
+              </div>
+            )}
 
             <TabsContent value="login">
               <form onSubmit={handleLogin}>

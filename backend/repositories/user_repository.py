@@ -45,7 +45,10 @@ class UserRepository:
         """Get user by email."""
         user_data = await self.collection.find_one({"email": email})
         if user_data:
+            # Convert ObjectId to string for Pydantic validation
             user_data["id"] = str(user_data["_id"])
+            # Remove the original _id field to avoid conflicts
+            user_data.pop("_id", None)
             return UserInDB(**user_data)
         return None
 
