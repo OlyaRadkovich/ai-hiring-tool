@@ -7,7 +7,7 @@ class FileValidator:
     
     ALLOWED_EXTENSIONS = {
         'cv': ['.pdf', '.doc', '.docx'],
-        'matrix': ['.xlsx', '.xls', '.csv']
+        'matrix': ['.xlsx', '.xls', '.csv', '.pdf']
     }
     
     MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB

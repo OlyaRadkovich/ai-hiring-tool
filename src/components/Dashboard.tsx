@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Brain, User, Settings, LogOut, FileText, Video } from "lucide-react";
+import { Brain, FileText, Video } from "lucide-react";
 import InterviewPreparation from "./InterviewPreparation";
 import InterviewResults from "./InterviewResults";
 
@@ -27,18 +27,9 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             </h1>
           </div>
           
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-              <User className="w-4 h-4" />
-              <span>John Doe</span>
-            </div>
-            <Button variant="ghost" size="sm">
-              <Settings className="w-4 h-4" />
-            </Button>
-            <Button variant="ghost" size="sm" onClick={onLogout}>
-              <LogOut className="w-4 h-4" />
-            </Button>
-          </div>
+          <Button variant="ghost" size="sm" onClick={onLogout}>
+            Back to Home
+          </Button>
         </div>
       </header>
 
