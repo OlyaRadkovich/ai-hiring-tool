@@ -11,6 +11,14 @@ node_modules
 dist
 dist-ssr
 *.local
+.vite-dev.log
+.vite-dev.pid
+.fastapi.log
+.fastapi.pid
+.venv/
+__pycache__/
+*.pyc
+.env
 
 # Editor directories and files
 .vscode/*
