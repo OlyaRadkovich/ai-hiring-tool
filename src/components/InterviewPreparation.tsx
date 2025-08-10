@@ -27,7 +27,7 @@ export default function InterviewPreparation() {
       const form = new FormData();
       form.append("profile", candidateProfile);
       form.append("file", cvFile);
-      const res = await fetch("/api/prep/analyze", { method: "POST", body: form });
+      const res = await fetch("/api/prep/", { method: "POST", body: form });
       if (!res.ok) throw new Error("Analyze failed");
       const data = await res.json();
       setAiSuggestions(data);
