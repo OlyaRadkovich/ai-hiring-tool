@@ -6,6 +6,9 @@ from ..core.config import settings
 from .mappers import parse_markdown_to_preparation_analysis
 from pypdf import PdfReader
 import io
+from google.adk.runners import Runner
+from google.adk.sessions import InMemorySessionService
+from google.genai import types
 
 
 class AnalysisService:
@@ -30,14 +33,34 @@ class AnalysisService:
         except Exception as e:
             cv_text = file_content.decode('utf-8', errors='ignore')
 
-        context = {
-            'cv_text': cv_text,
-            'requirements_and_feedback_text': profile
-        }
+        message_for_agent = types.Content(
+            role="user",
+            parts=[
+                types.Part(text=cv_text),
+                types.Part(text=f"### Требования к вакансии\n{profile}")
+            ]
+        )
 
-        pipeline_result_markdown = await pipeline.run(context)
+        session_service = InMemorySessionService()
 
-        return parse_markdown_to_preparation_analysis(pipeline_result_markdown)
+        session_id = "preparation_session_123"
+        user_id = "prep_user"
+        session = await session_service.create_session(app_name=settings.app_name, user_id=user_id,
+                                                       session_id=session_id)
+
+        runner = Runner(agent=pipeline, app_name=settings.app_name, session_service=session_service)
+
+        pipeline_result_markdown = ""
+
+        async for event in runner.run_async(session_id="preparation_session_123", user_id="prep_user",
+                                new_message=message_for_agent):
+            if event.content and event.content.parts:
+                for part in event.content.parts:
+                    if part.text:
+                        pipeline_result_markdown += part.text + " "
+
+
+        return parse_markdown_to_preparation_analysis(pipeline_result_markdown.strip())
 
     async def analyze_results(self, video_link: str, matrix_content: bytes) -> ResultsAnalysis:
         """
