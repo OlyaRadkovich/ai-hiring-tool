@@ -62,14 +62,27 @@ export default function InterviewPreparation() {
 
       const fontBase64 = fontData.split(',')[1];
 
+            const fontBoldResponse = await fetch('/fonts/Roboto-Bold.ttf');
+      const fontBoldBlob = await fontBoldResponse.blob();
+      const fontBoldData = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(fontBoldBlob);
+      });
+      const fontBoldBase64 = fontBoldData.split(',')[1];
+
       doc.addFileToVFS('Roboto-Regular.ttf', fontBase64);
       doc.addFont('Roboto-Regular.ttf', 'Roboto', 'normal');
 
-      doc.setFont('Roboto', 'normal');
+      doc.addFileToVFS('Roboto-Bold.ttf', fontBoldBase64);
+      doc.addFont('Roboto-Bold.ttf', 'Roboto', 'bold');
 
+      doc.setFont('Roboto', 'bold');
       doc.setFontSize(18);
       doc.text("AI-Generated Interview Guide", 14, 20);
 
+      doc.setFont('Roboto', 'bold');
       doc.setFontSize(14);
       doc.text("Key Topics to Cover", 14, 35);
 
@@ -78,7 +91,7 @@ export default function InterviewPreparation() {
         body: aiSuggestions.keyTopics.map((topic: string) => [topic]),
         theme: 'plain',
         styles: {
-          font: 'Roboto', // 4. Указываем шрифт для таблицы
+          font: 'Roboto',
           fontSize: 10
         },
       });
@@ -96,10 +109,12 @@ export default function InterviewPreparation() {
         theme: 'grid',
         headStyles: {
           fillColor: [41, 128, 185],
-          font: 'Roboto'
+          font: 'Roboto',
+          fontStyle: 'bold',
         },
         bodyStyles: {
-          font: 'Roboto'
+          font: 'Roboto',
+          fontStyle: 'normal',
         }
       });
 

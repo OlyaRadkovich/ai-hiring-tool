@@ -3,16 +3,13 @@ import json
 import io
 from loguru import logger
 
-# Модели Pydantic и конфиг
 from backend.api.models import PreparationAnalysis, ResultsAnalysis, ScoreBreakdown
 from ..core.config import settings
 
-# Импортируем агентов
 from backend.agents.pipeline_1_pre_interview.agent_1_data_parser import agent_1_data_parser
 from backend.agents.pipeline_1_pre_interview.agent_2_profiler import agent_2_profiler
 from backend.agents.pipeline_1_pre_interview.agent_3_plan_generator import agent_3_plan_generator
 
-# Утилиты
 from pypdf import PdfReader
 import docx
 from google.adk.runners import Runner
@@ -31,11 +28,10 @@ class AnalysisService:
             logger.error("Google API key не предоставлен.")
             raise ValueError("Google API key is not provided.")
 
-        # --- ⭐️ КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: Устанавливаем API ключ как переменную окружения ---
+        # ---Устанавливаем API ключ как переменную окружения ---
         os.environ['GOOGLE_API_KEY'] = api_key_to_use
         logger.success("API ключ Google установлен как переменная окружения.")
 
-        # --- Шаг 1: Извлечение текста из файла ---
         logger.info(f"Извлечение текста из файла: {filename}")
         cv_text = ""
         try:
@@ -45,9 +41,19 @@ class AnalysisService:
                 logger.success("Текст из PDF успешно извлечен.")
             elif filename.lower().endswith('.docx'):
                 doc = docx.Document(cv_file)
-                lines = [para.text.strip() for para in doc.paragraphs if para.text.strip()]
-                cv_text = "\n".join(lines)
-                logger.success("Текст из DOCX успешно извлечен и очищен.")
+                full_text = []
+                for para in doc.paragraphs:
+                    if para.text.strip():
+                        full_text.append(para.text)
+                full_text.append("\n--- Табличные данные ---\n")
+                for table in doc.tables:
+                    for row in table.rows:
+                        row_text = " | ".join(cell.text for cell in row.cells)
+                        if row_text.strip():
+                            full_text.append(row_text)
+                    full_text.append("\n")
+                cv_text = "\n".join(full_text)
+                logger.success("Текст из DOCX успешно извлечен.")
             else:
                 cv_text = cv_file.read().decode('utf-8', errors='ignore')
                 logger.success("Файл прочитан как текстовый.")
@@ -57,13 +63,11 @@ class AnalysisService:
 
         logger.debug(f"Извлеченный текст резюме (первые 200 символов): {cv_text[:200]}...")
 
-        # --- Настройка сессии ---
         session_service = InMemorySessionService()
         session_id = "preparation_session_123"
         user_id = "prep_user"
         await session_service.create_session(app_name=settings.app_name, user_id=user_id, session_id=session_id)
 
-        # --- Запуск Агента 1 ---
         logger.info("🚀 Запуск agent_1_data_parser...")
         runner_1 = Runner(agent=agent_1_data_parser, app_name=settings.app_name, session_service=session_service)
         message_for_agent_1 = types.Content(role="user", parts=[types.Part(text=cv_text), types.Part(
@@ -77,7 +81,6 @@ class AnalysisService:
         logger.success("✅ agent_1_data_parser завершил работу.")
         logger.debug(f"Выходные данные Агента 1 (JSON):\n{agent_1_output}")
 
-        # --- Запуск Агента 2 ---
         logger.info("🚀 Запуск agent_2_profiler...")
         runner_2 = Runner(agent=agent_2_profiler, app_name=settings.app_name, session_service=session_service)
         message_for_agent_2 = types.Content(role="user", parts=[types.Part(text=agent_1_output)])
@@ -89,7 +92,6 @@ class AnalysisService:
         logger.success("✅ agent_2_profiler завершил работу.")
         logger.debug(f"Выходные данные Агента 2 (Текстовый профиль):\n{agent_2_output}")
 
-        # --- Запуск Агента 3 ---
         logger.info("🚀 Запуск agent_3_plan_generator...")
         runner_3 = Runner(agent=agent_3_plan_generator, app_name=settings.app_name, session_service=session_service)
         message_for_agent_3 = types.Content(role="user", parts=[types.Part(text=agent_2_output)])
@@ -101,14 +103,11 @@ class AnalysisService:
         logger.success("✅ agent_3_plan_generator завершил работу.")
         logger.debug(f"Финальные выходные данные от Агента 3:\n{final_output}")
 
-        # --- Финальный парсинг и возврат результата ---
         logger.info("Парсинг финального вывода в объект Pydantic...")
         try:
-            # Убираем возможные ```json ``` обертки, если агент их вернет
             clean_json_str = final_output.strip().replace("```json", "").replace("```", "").strip()
             data = json.loads(clean_json_str)
 
-            # Добавляем стандартное сообщение в ответ
             data["message"] = "Interview preparation plan created successfully."
 
             result = PreparationAnalysis(**data)
