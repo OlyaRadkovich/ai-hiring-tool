@@ -21,9 +21,6 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
               InterviewAI
             </h1>
           </div>
-          <Button onClick={onGetStarted} className="bg-gradient-primary hover:shadow-glow transition-all duration-300">
-            Get Started
-          </Button>
         </div>
       </header>
 
@@ -40,18 +37,15 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
             Leverage advanced AI to prepare, analyze, and evaluate candidate interviews with unprecedented accuracy.
             Generate comprehensive reports and make data-driven hiring decisions.
           </p>
-          <div className="flex gap-4 justify-center flex-wrap">
-            <Button 
-              size="lg" 
-              onClick={onGetStarted}
-              className="bg-gradient-primary hover:shadow-glow transition-all duration-300 px-8"
-            >
-              Start Free Trial
-            </Button>
-            <Button variant="outline" size="lg" className="border-primary/20 hover:border-primary/40">
-              Watch Demo
-            </Button>
-          </div>
+            <div className="flex justify-center">
+              <Button
+                size="lg"
+                onClick={onGetStarted}
+                className="bg-gradient-primary hover:shadow-glow transition-all duration-300 px-16 py-8 text-lg w-full md:w-auto"
+              >
+                Get Started
+              </Button>
+            </div>
         </div>
       </section>
 
@@ -154,7 +148,7 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
             onClick={onGetStarted}
             className="px-8 hover:shadow-lg transition-all duration-300"
           >
-            Start Your Free Trial
+            Get Started
           </Button>
         </div>
       </section>

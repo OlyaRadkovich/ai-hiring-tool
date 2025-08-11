@@ -159,7 +159,7 @@ export default function InterviewPreparation() {
               <span>Candidate Profile</span>
             </CardTitle>
             <CardDescription>
-              Describe the ideal candidate profile for this position
+              Required Candidate Profile and Recruiter’s Feedback
             </CardDescription>
           </CardHeader>
           <CardContent>
