@@ -45,8 +45,9 @@ class AnalysisService:
                 logger.success("Текст из PDF успешно извлечен.")
             elif filename.lower().endswith('.docx'):
                 doc = docx.Document(cv_file)
-                cv_text = "\n".join(para.text for para in doc.paragraphs)
-                logger.success("Текст из DOCX успешно извлечен.")
+                lines = [para.text.strip() for para in doc.paragraphs if para.text.strip()]
+                cv_text = "\n".join(lines)
+                logger.success("Текст из DOCX успешно извлечен и очищен.")
             else:
                 cv_text = cv_file.read().decode('utf-8', errors='ignore')
                 logger.success("Файл прочитан как текстовый.")
