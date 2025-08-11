@@ -1,6 +1,7 @@
 from fastapi import APIRouter, UploadFile, File, Form, status, HTTPException
 from typing import Optional
 from loguru import logger
+import io
 from backend.api.models import PreparationAnalysis, ErrorResponse
 from backend.services.analysis_service import AnalysisService
 
@@ -32,10 +33,12 @@ async def analyze_preparation_endpoint(
         logger.info("Received a new analysis request for interview preparation.")
 
         file_content_bytes = await cv_file.read()
+        file_like_object = io.BytesIO(file_content_bytes)
 
         analysis_result = await analysis_service.analyze_preparation(
             profile=profile,
-            file_content=file_content_bytes
+            cv_file=file_like_object,
+            filename=cv_file.filename
         )
 
         logger.info("Analysis completed successfully. Returning result.")
