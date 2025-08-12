@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from core.config import settings
-from api.routes import prep, results
+from .core.config import settings
+from .api.routes import prep, results
 
 
 def create_app() -> FastAPI:
@@ -23,7 +23,6 @@ def create_app() -> FastAPI:
     def health() -> dict:
         return {"status": "ok"}
 
-    # Include API routes
     app.include_router(prep.router, prefix=f"{settings.api_prefix}/prep", tags=["preparation"])
     app.include_router(results.router, prefix=f"{settings.api_prefix}/results", tags=["results"])
 

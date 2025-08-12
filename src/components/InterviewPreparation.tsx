@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Upload, FileText, Brain, Download, Edit3 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 export default function InterviewPreparation() {
   const [cvFile, setCvFile] = useState<File | null>(null);
@@ -23,18 +23,106 @@ export default function InterviewPreparation() {
   const handleAnalyze = async () => {
     if (!cvFile) return;
     setIsAnalyzing(true);
+    setAiSuggestions(null);
     try {
       const form = new FormData();
       form.append("profile", candidateProfile);
-      form.append("file", cvFile);
-      const res = await fetch("/api/prep/analyze", { method: "POST", body: form });
-      if (!res.ok) throw new Error("Analyze failed");
+      form.append("cv_file", cvFile);
+      const res = await fetch("/api/prep/", { method: "POST", body: form });
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.detail || "Analyze failed");
+      }
       const data = await res.json();
       setAiSuggestions(data);
     } catch (err) {
       console.error(err);
     } finally {
       setIsAnalyzing(false);
+    }
+  };
+
+  const handleExportPdf = async () => {
+    if (!aiSuggestions) {
+      alert("Нет данных для генерации отчета. Сначала проанализируйте CV.");
+      return;
+    }
+
+    try {
+      const doc = new jsPDF();
+
+            const fontResponse = await fetch('/fonts/Roboto-Regular.ttf');
+      const fontBlob = await fontResponse.blob();
+      const fontData = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(fontBlob);
+      });
+
+      const fontBase64 = fontData.split(',')[1];
+
+            const fontBoldResponse = await fetch('/fonts/Roboto-Bold.ttf');
+      const fontBoldBlob = await fontBoldResponse.blob();
+      const fontBoldData = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(fontBoldBlob);
+      });
+      const fontBoldBase64 = fontBoldData.split(',')[1];
+
+      doc.addFileToVFS('Roboto-Regular.ttf', fontBase64);
+      doc.addFont('Roboto-Regular.ttf', 'Roboto', 'normal');
+
+      doc.addFileToVFS('Roboto-Bold.ttf', fontBoldBase64);
+      doc.addFont('Roboto-Bold.ttf', 'Roboto', 'bold');
+
+      doc.setFont('Roboto', 'bold');
+      doc.setFontSize(18);
+      doc.text("AI-Generated Interview Guide", 14, 20);
+
+      doc.setFont('Roboto', 'bold');
+      doc.setFontSize(14);
+      doc.text("Key Topics to Cover", 14, 35);
+
+      autoTable(doc, {
+        startY: 40,
+        body: aiSuggestions.keyTopics.map((topic: string) => [topic]),
+        theme: 'plain',
+        styles: {
+          font: 'Roboto',
+          fontSize: 10
+        },
+      });
+
+      const firstTableY = (doc as any).lastAutoTable.finalY || 60;
+
+      const tableData = aiSuggestions.suggestedQuestions.flatMap((category: any) =>
+        category.questions.map((question: string) => [category.category, question])
+      );
+
+      autoTable(doc, {
+        startY: firstTableY + 10,
+        head: [['Category', 'Question']],
+        body: tableData,
+        theme: 'grid',
+        headStyles: {
+          fillColor: [41, 128, 185],
+          font: 'Roboto',
+          fontStyle: 'bold',
+        },
+        bodyStyles: {
+          font: 'Roboto',
+          fontStyle: 'normal',
+        }
+      });
+
+      doc.save("Interview_Preparation_Guide.pdf");
+
+    } catch (error) {
+      console.error("Критическая ошибка при создании PDF:", error);
+      alert("Произошла ошибка при генерации PDF. Проверьте консоль.");
     }
   };
 
@@ -86,7 +174,7 @@ export default function InterviewPreparation() {
               <span>Candidate Profile</span>
             </CardTitle>
             <CardDescription>
-              Describe the ideal candidate profile for this position
+              Required Candidate Profile and Recruiter’s Feedback
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -127,7 +215,7 @@ export default function InterviewPreparation() {
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <h3 className="text-2xl font-bold">AI-Generated Interview Guide</h3>
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" onClick={handleExportPdf}>
               <Download className="w-4 h-4 mr-2" />
               Export PDF
             </Button>
