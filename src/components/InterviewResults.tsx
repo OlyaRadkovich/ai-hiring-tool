@@ -39,8 +39,8 @@ export default function InterviewResults() {
     try {
       const form = new FormData();
       form.append("video_link", videoLink);
-      form.append("matrix", competencyMatrix);
-      const res = await fetch("/api/results/analyze", { method: "POST", body: form });
+      form.append("matrix_file", competencyMatrix);
+      const res = await fetch("/api/results/", { method: "POST", body: form });
       if (!res.ok) throw new Error("Analyze failed");
       const data = await res.json();
       setAnalysisResults(data);

@@ -1,6 +1,8 @@
 import os
 import json
 import io
+import re
+import asyncio
 from loguru import logger
 
 from backend.api.models import PreparationAnalysis, ResultsAnalysis, ScoreBreakdown
@@ -9,16 +11,106 @@ from ..core.config import settings
 from backend.agents.pipeline_1_pre_interview.agent_1_data_parser import agent_1_data_parser
 from backend.agents.pipeline_1_pre_interview.agent_2_profiler import agent_2_profiler
 from backend.agents.pipeline_1_pre_interview.agent_3_plan_generator import agent_3_plan_generator
+from backend.agents.pipeline_2_post_interview.agent_4_data_extractor import agent_4_data_extractor
 
+import assemblyai as aai
 from pypdf import PdfReader
 import docx
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseDownload
 
 
 class AnalysisService:
     """Service responsible for interview analysis business logic using AI Agents"""
+
+    def __init__(self):
+        aai.settings.api_key = settings.assemblyai_api_key
+        if not aai.settings.api_key:
+            logger.warning("API ключ для AssemblyAI не настроен в .env файле!")
+        else:
+            logger.success("Клиент AssemblyAI сконфигурирован.")
+
+        self.drive_service = None
+        try:
+            credentials_path = settings.google_application_credentials
+
+            credentials = service_account.Credentials.from_service_account_file(
+                credentials_path
+            )
+            self.drive_service = build('drive', 'v3', credentials=credentials)
+            logger.success("Клиент Google Drive API успешно инициализирован.")
+        except Exception as e:
+            logger.error(f"Ошибка инициализации клиента Google Drive API: {e}")
+
+    def _get_google_drive_file_id(self, link: str) -> str:
+        """Извлекает ID файла из ссылки на Google Drive."""
+        match = re.search(r'/file/d/([a-zA-Z0-9_-]+)', link)
+        if match:
+            return match.group(1)
+        raise ValueError("Некорректная ссылка на Google Drive. Не удалось извлечь ID файла.")
+
+    async def _download_audio_from_drive(self, file_id: str) -> io.BytesIO:
+        """
+        Асинхронно загружает файл из Google Drive, используя синхронную библиотеку.
+        """
+        if not self.drive_service:
+            raise ConnectionError("Сервис Google Drive не инициализирован. Проверьте учетные данные.")
+
+        logger.info(f"Начало загрузки файла с ID: {file_id} из Google Drive.")
+
+        try:
+            request = self.drive_service.files().get_media(fileId=file_id)
+            file_io = io.BytesIO()
+            downloader = MediaIoBaseDownload(file_io, request)
+
+            def download_in_thread():
+                done = False
+                while not done:
+                    status, done = downloader.next_chunk()
+                    if status:
+                        logger.info(f"Прогресс загрузки: {int(status.progress() * 100)}%.")
+
+            await asyncio.to_thread(download_in_thread)
+
+            logger.success(f"Файл {file_id} успешно загружен.")
+            file_io.seek(0)
+            return file_io
+
+        except Exception as e:
+            logger.error(f"Не удалось скачать файл из Google Drive: {e}")
+            raise IOError(f"Ошибка при скачивании файла с Google Drive. "
+                          f"Убедитесь, что вы поделились файлом с email вашего сервисного аккаунта.")
+
+    async def _transcribe_audio_assemblyai(self, audio_data: io.BytesIO) -> str:
+        """
+        Транскрибирует аудио с помощью AssemblyAI SDK, автоматически определяя язык.
+        """
+        logger.info("Начало транскрипции аудио через AssemblyAI с автоопределением языка...")
+
+        config = aai.TranscriptionConfig(language_detection=True)
+        transcriber = aai.Transcriber(config=config)
+        transcript = await transcriber.transcribe_async(audio_data)
+
+        if transcript.status == aai.TranscriptStatus.error:
+            logger.error(f"Ошибка транскрипции AssemblyAI: {transcript.error}")
+            raise ValueError(f"Transcription failed: {transcript.error}")
+
+        detected_language = transcript.language_code
+        confidence = transcript.language_confidence or 0
+        logger.success(f"Транскрипция AssemblyAI успешно завершена. "
+                       f"Определен язык: {detected_language} (уверенность: {confidence:.2f})")
+
+        if confidence < 0.7:
+            logger.warning(f"Низкая уверенность в определении языка ({confidence:.2f}). "
+                           f"Результат может быть неточным.")
+
+        return transcript.text or ""
+
+    # PIPELINE 1
 
     async def analyze_preparation(self, profile: str, cv_file: io.BytesIO, filename: str) -> PreparationAnalysis:
         logger.info("Начало процесса подготовки к интервью...")
@@ -63,6 +155,7 @@ class AnalysisService:
 
         logger.debug(f"Извлеченный текст резюме (первые 200 символов): {cv_text[:200]}...")
 
+        # TODO: Заменить на динамические ID для многопользовательского режима
         session_service = InMemorySessionService()
         session_id = "preparation_session_123"
         user_id = "prep_user"
@@ -118,32 +211,39 @@ class AnalysisService:
             logger.error(f"Полученный текст: {final_output}")
             raise ValueError("AI-сервис вернул некорректный формат данных.")
 
+    # PIPELINE 2
+
     async def analyze_results(self, video_link: str, matrix_content: bytes) -> ResultsAnalysis:
         """
-        Analyze interview results using the post-interview pipeline.
+        Анализирует результаты интервью, запуская пайплайн 2.
         """
-        api_key_to_use = settings.google_api_key
-        if not api_key_to_use:
-            raise ValueError("Google API key is not provided.")
+        logger.info("🚀 Запуск Пайплайна 2: Анализ результатов интервью...")
+        try:
+            file_id = self._get_google_drive_file_id(video_link)
+            audio_file_stream = await self._download_audio_from_drive(file_id)
+            transcription_text = await self._transcribe_audio_assemblyai(audio_file_stream)
 
-        # 2. Здесь будет логика для второго пайплайна, который мы пока не создали.
-        # Например:
-        # pipeline = post_pipeline.create_post_interview_pipeline(api_key_to_use)
-        # context = { 'video_link': video_link, 'matrix_content': matrix_content }
-        # pipeline_result_text = await pipeline.run(context)
+            logger.info(f"Получена транскрипция (первые 100 символов): {transcription_text[:100]}...")
 
-        # 3. Здесь будет логика маппинга результата от второго пайплайна
-        # в объект ResultsAnalysis.
+        except Exception as e:
+            logger.error(f"Ошибка на этапе извлечения данных (Агент 4): {e}")
+            raise ValueError(f"Ошибка обработки видео или транскрипции: {e}")
 
+        # --- Последующие агенты (пока заглушки) ---
+        # Здесь будут вызовы Агентов 5, 6, 7
+
+        logger.success("✅ Пайплайн 2 успешно завершил работу (с заглушками).")
+
+        # Мокаем финальный результат для демонстрации
         return ResultsAnalysis(
             message="Interview analysis completed successfully",
-            transcription="Transcribed text from video analysis.",
+            transcription=transcription_text,
             scores=ScoreBreakdown(
                 technical=90, communication=85, leadership=88, cultural=80, overall=85
             ),
-            strengths=["...", "..."],
-            concerns=["...", "..."],
+            strengths=["Отличные знания в области проектирования систем.", "Сильные коммуникативные навыки."],
+            concerns=["Недостаточно глубокий опыт в докере.", "Требует больше самостоятельности."],
             recommendation="RECOMMEND HIRE",
-            reasoning="Reasoning for recommendation.",
-            topicsDiscussed=["Topic 1", "Topic 2"]
+            reasoning="Кандидат показал себя как сильный технический специалист с хорошим потенциалом роста.",
+            topicsDiscussed=["Микросервисы", "Базы данных", "Опыт в команде"]
         )
