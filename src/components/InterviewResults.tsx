@@ -3,15 +3,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Video, 
-  Upload, 
-  Brain, 
-  Download, 
-  Play, 
+import {
+  Video,
+  Upload,
+  Brain,
+  Download,
+  Play,
   FileText,
   CheckCircle,
   AlertCircle,
@@ -25,6 +24,7 @@ export default function InterviewResults() {
   const [competencyMatrix, setCompetencyMatrix] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [analysisResults, setAnalysisResults] = useState<any>(null);
+  const [isExporting, setIsExporting] = useState(false);
 
   const handleMatrixUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -51,16 +51,43 @@ export default function InterviewResults() {
     }
   };
 
+  const handleExportDocx = async () => {
+    if (!analysisResults) return;
+    setIsExporting(true);
+    try {
+      const response = await fetch("/api/results/export", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(analysisResults),
+      });
+
+      if (!response.ok) {
+        throw new Error("Не удалось сгенерировать DOCX отчет.");
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "Interview_Report.docx";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+
+    } catch (error) {
+      console.error("Ошибка при экспорте DOCX:", error);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const getScoreColor = (score: number) => {
     if (score >= 80) return "text-green-600";
     if (score >= 60) return "text-yellow-600";
     return "text-red-600";
-  };
-
-  const getScoreBg = (score: number) => {
-    if (score >= 80) return "bg-green-100";
-    if (score >= 60) return "bg-yellow-100";
-    return "bg-red-100";
   };
 
   return (
@@ -157,41 +184,22 @@ export default function InterviewResults() {
         </Button>
       </div>
 
-      {/* Processing Status */}
-      {isProcessing && (
-        <Card className="shadow-card">
-          <CardContent className="pt-6">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between text-sm">
-                <span>Downloading video from Google Drive...</span>
-                <CheckCircle className="w-5 h-5 text-green-500" />
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span>Transcribing audio with AI...</span>
-                <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-              </div>
-              <div className="flex items-center justify-between text-sm text-muted-foreground">
-                <span>Analyzing content against competency matrix...</span>
-                <div className="w-5 h-5" />
-              </div>
-              <Progress value={60} className="w-full" />
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       {/* Analysis Results */}
       {analysisResults && (
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <h3 className="text-2xl font-bold">Interview Analysis Results</h3>
-            <Button variant="outline" size="sm">
-              <Download className="w-4 h-4 mr-2" />
-              Export DOCX Report
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportDocx}
+              disabled={isExporting}
+            >
+              <Download className={`w-4 h-4 mr-2 ${isExporting ? 'animate-pulse' : ''}`} />
+              {isExporting ? "Экспорт..." : "Export DOCX Report"}
             </Button>
           </div>
 
-          {/* Overall Recommendation */}
           <Card className="shadow-card border-l-4 border-l-green-500">
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
@@ -209,7 +217,6 @@ export default function InterviewResults() {
             </CardContent>
           </Card>
 
-          {/* Competency Scores */}
           <Card className="shadow-card">
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
@@ -219,7 +226,7 @@ export default function InterviewResults() {
             </CardHeader>
             <CardContent>
               <div className="grid md:grid-cols-2 gap-6">
-                {Object.entries(analysisResults.scores).map(([category, score]: [string, number]) => (
+                {Object.entries(analysisResults.scores).map(([category, score]: [string, any]) => (
                   <div key={category} className="space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="font-medium capitalize">{category}</span>
@@ -234,7 +241,6 @@ export default function InterviewResults() {
             </CardContent>
           </Card>
 
-          {/* Strengths & Concerns */}
           <div className="grid md:grid-cols-2 gap-6">
             <Card className="shadow-card">
               <CardHeader>
@@ -275,7 +281,6 @@ export default function InterviewResults() {
             </Card>
           </div>
 
-          {/* Topics Discussed */}
           <Card className="shadow-card">
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
@@ -290,21 +295,6 @@ export default function InterviewResults() {
                     {topic}
                   </Badge>
                 ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Transcript Preview */}
-          <Card className="shadow-card">
-            <CardHeader>
-              <CardTitle>Interview Transcript</CardTitle>
-              <CardDescription>
-                AI-generated transcript from the video interview
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="bg-muted/50 rounded-lg p-4 max-h-60 overflow-y-auto">
-                <p className="text-sm leading-relaxed">{analysisResults.transcription}</p>
               </div>
             </CardContent>
           </Card>
