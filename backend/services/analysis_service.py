@@ -11,7 +11,8 @@ from ..core.config import settings
 from backend.agents.pipeline_1_pre_interview.agent_1_data_parser import agent_1_data_parser
 from backend.agents.pipeline_1_pre_interview.agent_2_profiler import agent_2_profiler
 from backend.agents.pipeline_1_pre_interview.agent_3_plan_generator import agent_3_plan_generator
-from backend.agents.pipeline_2_post_interview.agent_4_data_extractor import agent_4_data_extractor
+from backend.agents.pipeline_2_post_interview.agent_4_topic_extractor import agent_4_topic_extractor
+from backend.agents.pipeline_2_post_interview.agent_5_final_report_generator import agent_5_final_report_generator
 
 import assemblyai as aai
 from pypdf import PdfReader
@@ -28,26 +29,36 @@ class AnalysisService:
     """Service responsible for interview analysis business logic using AI Agents"""
 
     def __init__(self):
-        aai.settings.api_key = settings.assemblyai_api_key
-        if not aai.settings.api_key:
-            logger.warning("API ключ для AssemblyAI не настроен в .env файле!")
-        else:
+        if settings.assemblyai_api_key:
+            aai.settings.api_key = settings.assemblyai_api_key
             logger.success("Клиент AssemblyAI сконфигурирован.")
+        else:
+            logger.warning("API ключ для AssemblyAI не настроен в .env файле!")
 
         self.drive_service = None
         try:
             credentials_path = settings.google_application_credentials
-
-            credentials = service_account.Credentials.from_service_account_file(
-                credentials_path
-            )
+            credentials = service_account.Credentials.from_service_account_file(credentials_path)
             self.drive_service = build('drive', 'v3', credentials=credentials)
             logger.success("Клиент Google Drive API успешно инициализирован.")
         except Exception as e:
             logger.error(f"Ошибка инициализации клиента Google Drive API: {e}")
 
+    def _set_google_api_key(self):
+        """
+        Устанавливает ключ Google API как переменную окружения.
+        """
+        api_key_to_use = settings.google_api_key
+        if not api_key_to_use:
+            logger.error("Ключ Google API (google_api_key) не найден в .env файле.")
+            raise ValueError("Google API key is not provided.")
+        os.environ['GOOGLE_API_KEY'] = api_key_to_use
+        logger.info("Ключ Google API установлен как переменная окружения для текущего запроса.")
+
     def _get_google_drive_file_id(self, link: str) -> str:
-        """Извлекает ID файла из ссылки на Google Drive."""
+        """
+        Извлекает ID файла из ссылки на Google Drive.
+        """
         match = re.search(r'/file/d/([a-zA-Z0-9_-]+)', link)
         if match:
             return match.group(1)
@@ -55,13 +66,11 @@ class AnalysisService:
 
     async def _download_audio_from_drive(self, file_id: str) -> io.BytesIO:
         """
-        Асинхронно загружает файл из Google Drive, используя синхронную библиотеку.
+        Асинхронно загружает файл из Google Drive.
         """
         if not self.drive_service:
             raise ConnectionError("Сервис Google Drive не инициализирован. Проверьте учетные данные.")
-
         logger.info(f"Начало загрузки файла с ID: {file_id} из Google Drive.")
-
         try:
             request = self.drive_service.files().get_media(fileId=file_id)
             file_io = io.BytesIO()
@@ -75,54 +84,43 @@ class AnalysisService:
                         logger.info(f"Прогресс загрузки: {int(status.progress() * 100)}%.")
 
             await asyncio.to_thread(download_in_thread)
-
             logger.success(f"Файл {file_id} успешно загружен.")
             file_io.seek(0)
             return file_io
-
         except Exception as e:
-            logger.error(f"Не удалось скачать файл из Google Drive: {e}")
-            raise IOError(f"Ошибка при скачивании файла с Google Drive. "
-                          f"Убедитесь, что вы поделились файлом с email вашего сервисного аккаунта.")
+            logger.error(f"Критическая ошибка при попытке скачать файл из Google Drive: {e}", exc_info=True)
+            raise e
 
     async def _transcribe_audio_assemblyai(self, audio_data: io.BytesIO) -> str:
         """
-        Транскрибирует аудио с помощью AssemblyAI SDK, автоматически определяя язык.
+        Транскрибирует аудио с помощью AssemblyAI SDK, запуская синхронный вызов в отдельном потоке.
         """
         logger.info("Начало транскрипции аудио через AssemblyAI с автоопределением языка...")
 
         config = aai.TranscriptionConfig(language_detection=True)
         transcriber = aai.Transcriber(config=config)
-        transcript = await transcriber.transcribe_async(audio_data)
+
+        def sync_transcribe_task():
+            logger.info("Запуск синхронной задачи транскрипции в отдельном потоке...")
+            return transcriber.transcribe(audio_data)
+
+        transcript = await asyncio.to_thread(sync_transcribe_task)
 
         if transcript.status == aai.TranscriptStatus.error:
             logger.error(f"Ошибка транскрипции AssemblyAI: {transcript.error}")
             raise ValueError(f"Transcription failed: {transcript.error}")
 
-        detected_language = transcript.language_code
-        confidence = transcript.language_confidence or 0
-        logger.success(f"Транскрипция AssemblyAI успешно завершена. "
-                       f"Определен язык: {detected_language} (уверенность: {confidence:.2f})")
+        logger.success("Транскрипция AssemblyAI успешно завершена.")
 
-        if confidence < 0.7:
-            logger.warning(f"Низкая уверенность в определении языка ({confidence:.2f}). "
-                           f"Результат может быть неточным.")
+        if not transcript.text:
+            logger.warning("Транскрипция вернула пустой текст.")
 
         return transcript.text or ""
 
-    # PIPELINE 1
-
     async def analyze_preparation(self, profile: str, cv_file: io.BytesIO, filename: str) -> PreparationAnalysis:
-        logger.info("Начало процесса подготовки к интервью...")
+        logger.info("Начало процесса подготовки к интервью (Пайплайн 1)...")
 
-        api_key_to_use = settings.google_api_key
-        if not api_key_to_use:
-            logger.error("Google API key не предоставлен.")
-            raise ValueError("Google API key is not provided.")
-
-        # ---Устанавливаем API ключ как переменную окружения ---
-        os.environ['GOOGLE_API_KEY'] = api_key_to_use
-        logger.success("API ключ Google установлен как переменная окружения.")
+        self._set_google_api_key()
 
         logger.info(f"Извлечение текста из файла: {filename}")
         cv_text = ""
@@ -130,34 +128,18 @@ class AnalysisService:
             if filename.lower().endswith('.pdf'):
                 reader = PdfReader(cv_file)
                 cv_text = "\n".join(page.extract_text() or "" for page in reader.pages)
-                logger.success("Текст из PDF успешно извлечен.")
             elif filename.lower().endswith('.docx'):
                 doc = docx.Document(cv_file)
-                full_text = []
-                for para in doc.paragraphs:
-                    if para.text.strip():
-                        full_text.append(para.text)
-                full_text.append("\n--- Табличные данные ---\n")
-                for table in doc.tables:
-                    for row in table.rows:
-                        row_text = " | ".join(cell.text for cell in row.cells)
-                        if row_text.strip():
-                            full_text.append(row_text)
-                    full_text.append("\n")
+                full_text = [para.text for para in doc.paragraphs if para.text.strip()]
                 cv_text = "\n".join(full_text)
-                logger.success("Текст из DOCX успешно извлечен.")
             else:
                 cv_text = cv_file.read().decode('utf-8', errors='ignore')
-                logger.success("Файл прочитан как текстовый.")
         except Exception as e:
             logger.error(f"Ошибка при чтении файла {filename}: {e}")
             raise ValueError(f"Could not process file: {filename}")
 
-        logger.debug(f"Извлеченный текст резюме (первые 200 символов): {cv_text[:200]}...")
-
-        # TODO: Заменить на динамические ID для многопользовательского режима
         session_service = InMemorySessionService()
-        session_id = "preparation_session_123"
+        session_id = f"prep_session_{os.urandom(8).hex()}"
         user_id = "prep_user"
         await session_service.create_session(app_name=settings.app_name, user_id=user_id, session_id=session_id)
 
@@ -166,13 +148,9 @@ class AnalysisService:
         message_for_agent_1 = types.Content(role="user", parts=[types.Part(text=cv_text), types.Part(
             text=f"### Требования к вакансии\n{profile}")])
         agent_1_output = ""
-        async for event in runner_1.run_async(session_id=session_id, user_id=user_id,
-                                              new_message=message_for_agent_1):  # Ключ больше не передается здесь
+        async for event in runner_1.run_async(session_id=session_id, user_id=user_id, new_message=message_for_agent_1):
             if event.content and event.content.parts:
                 agent_1_output += "".join(part.text for part in event.content.parts if part.text)
-
-        logger.success("✅ agent_1_data_parser завершил работу.")
-        logger.debug(f"Выходные данные Агента 1 (JSON):\n{agent_1_output}")
 
         logger.info("🚀 Запуск agent_2_profiler...")
         runner_2 = Runner(agent=agent_2_profiler, app_name=settings.app_name, session_service=session_service)
@@ -182,9 +160,6 @@ class AnalysisService:
             if event.content and event.content.parts:
                 agent_2_output += "".join(part.text for part in event.content.parts if part.text)
 
-        logger.success("✅ agent_2_profiler завершил работу.")
-        logger.debug(f"Выходные данные Агента 2 (Текстовый профиль):\n{agent_2_output}")
-
         logger.info("🚀 Запуск agent_3_plan_generator...")
         runner_3 = Runner(agent=agent_3_plan_generator, app_name=settings.app_name, session_service=session_service)
         message_for_agent_3 = types.Content(role="user", parts=[types.Part(text=agent_2_output)])
@@ -193,57 +168,70 @@ class AnalysisService:
             if event.content and event.content.parts:
                 final_output += "".join(part.text for part in event.content.parts if part.text)
 
-        logger.success("✅ agent_3_plan_generator завершил работу.")
-        logger.debug(f"Финальные выходные данные от Агента 3:\n{final_output}")
-
-        logger.info("Парсинг финального вывода в объект Pydantic...")
+        logger.info("Парсинг финального вывода...")
         try:
             clean_json_str = final_output.strip().replace("```json", "").replace("```", "").strip()
             data = json.loads(clean_json_str)
-
             data["message"] = "Interview preparation plan created successfully."
-
-            result = PreparationAnalysis(**data)
-            logger.success("Процесс подготовки к интервью успешно завершен.")
-            return result
+            return PreparationAnalysis(**data)
         except json.JSONDecodeError as e:
-            logger.error(f"Ошибка декодирования JSON от Агента 3: {e}")
-            logger.error(f"Полученный текст: {final_output}")
+            logger.error(f"Ошибка декодирования JSON от Агента 3: {e}\nПолученный текст: {final_output}")
             raise ValueError("AI-сервис вернул некорректный формат данных.")
 
-    # PIPELINE 2
-
     async def analyze_results(self, video_link: str, matrix_content: bytes) -> ResultsAnalysis:
-        """
-        Анализирует результаты интервью, запуская пайплайн 2.
-        """
         logger.info("🚀 Запуск Пайплайна 2: Анализ результатов интервью...")
+
+        self._set_google_api_key()
+
+        file_id = self._get_google_drive_file_id(video_link)
+        audio_file_stream = await self._download_audio_from_drive(file_id)
+        transcription_text = await self._transcribe_audio_assemblyai(audio_file_stream)
+        if not transcription_text:
+            raise ValueError("Транскрипция не вернула текст.")
+
+        session_service = InMemorySessionService()
+        session_id = f"results_session_{os.urandom(8).hex()}"
+        user_id = "results_user"
+        await session_service.create_session(app_name=settings.app_name, user_id=user_id, session_id=session_id)
+
+        logger.info("🚀 Запуск agent_5_topic_extractor...")
+        runner_5 = Runner(agent=agent_4_topic_extractor, app_name=settings.app_name, session_service=session_service)
+        message_for_agent_5 = types.Content(role="user", parts=[types.Part(text=transcription_text)])
+        agent_5_output = ""
+        async for event in runner_5.run_async(session_id=session_id, user_id=user_id, new_message=message_for_agent_5):
+            if event.content and event.content.parts:
+                agent_5_output += "".join(part.text for part in event.content.parts if part.text)
+
+        logger.info("🚀 Запуск agent_6_final_report_generator...")
+        runner_6 = Runner(agent=agent_5_final_report_generator, app_name=settings.app_name,
+                          session_service=session_service)
+        combined_input_for_agent_6 = f"### Транскрипция интервью:\n{transcription_text}\n\n### Матрица компетенций:\n{matrix_content.decode('utf-8', errors='ignore')}"
+        message_for_agent_6 = types.Content(role="user", parts=[types.Part(text=combined_input_for_agent_6)])
+        agent_6_output = ""
+        async for event in runner_6.run_async(session_id=session_id, user_id=user_id, new_message=message_for_agent_6):
+            if event.content and event.content.parts:
+                agent_6_output += "".join(part.text for part in event.content.parts if part.text)
+
+        logger.info("Парсинг и объединение финальных результатов...")
         try:
-            file_id = self._get_google_drive_file_id(video_link)
-            audio_file_stream = await self._download_audio_from_drive(file_id)
-            transcription_text = await self._transcribe_audio_assemblyai(audio_file_stream)
+            clean_json_str_5 = agent_5_output.strip().replace("```json", "").replace("```", "").strip()
+            topics_data = json.loads(clean_json_str_5)
 
-            logger.info(f"Получена транскрипция (первые 100 символов): {transcription_text[:100]}...")
+            clean_json_str_6 = agent_6_output.strip().replace("```json", "").replace("```", "").strip()
+            report_data = json.loads(clean_json_str_6)
 
-        except Exception as e:
-            logger.error(f"Ошибка на этапе извлечения данных (Агент 4): {e}")
-            raise ValueError(f"Ошибка обработки видео или транскрипции: {e}")
-
-        # --- Последующие агенты (пока заглушки) ---
-        # Здесь будут вызовы Агентов 5, 6, 7
-
-        logger.success("✅ Пайплайн 2 успешно завершил работу (с заглушками).")
-
-        # Мокаем финальный результат для демонстрации
-        return ResultsAnalysis(
-            message="Interview analysis completed successfully",
-            transcription=transcription_text,
-            scores=ScoreBreakdown(
-                technical=90, communication=85, leadership=88, cultural=80, overall=85
-            ),
-            strengths=["Отличные знания в области проектирования систем.", "Сильные коммуникативные навыки."],
-            concerns=["Недостаточно глубокий опыт в докере.", "Требует больше самостоятельности."],
-            recommendation="RECOMMEND HIRE",
-            reasoning="Кандидат показал себя как сильный технический специалист с хорошим потенциалом роста.",
-            topicsDiscussed=["Микросервисы", "Базы данных", "Опыт в команде"]
-        )
+            return ResultsAnalysis(
+                message="Interview analysis completed successfully",
+                transcription=transcription_text,
+                scores=ScoreBreakdown(**report_data.get("scores", {})),
+                strengths=report_data.get("strengths", []),
+                concerns=report_data.get("concerns", []),
+                recommendation=report_data.get("recommendation", "N/A"),
+                reasoning=report_data.get("reasoning", ""),
+                topicsDiscussed=topics_data.get("topicsDiscussed", [])
+            )
+        except json.JSONDecodeError as e:
+            logger.error(f"Ошибка декодирования JSON: {e}")
+            logger.error(f"Проблемный JSON от Агента 5: {agent_5_output}")
+            logger.error(f"Проблемный JSON от Агента 6: {agent_6_output}")
+            raise ValueError("AI-сервис вернул некорректный формат данных.")

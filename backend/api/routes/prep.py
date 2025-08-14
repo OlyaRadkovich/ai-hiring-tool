@@ -1,12 +1,12 @@
-from fastapi import APIRouter, UploadFile, File, Form, status, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, status, HTTPException, Depends
 from typing import Optional
 from loguru import logger
 import io
 from backend.api.models import PreparationAnalysis, ErrorResponse
 from backend.services.analysis_service import AnalysisService
+from backend.api.deps import get_analysis_service
 
 router = APIRouter()
-analysis_service = AnalysisService()
 
 
 @router.post(
@@ -22,6 +22,7 @@ analysis_service = AnalysisService()
 async def analyze_preparation_endpoint(
         profile: str = Form(..., description="Job requirements and recruiter feedback text."),
         cv_file: UploadFile = File(..., description="Candidate's CV in text, PDF, or DOCX format."),
+        analysis_service: AnalysisService = Depends(get_analysis_service)
 ):
     if not cv_file.filename.lower().endswith(('.txt', '.pdf', '.docx')):
         raise HTTPException(
