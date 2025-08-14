@@ -1,5 +1,3 @@
-# backend/agents/pre_interview_pipeline/agent_1_data_parser.py
-
 # -*- coding: utf-8 -*-
 import json
 from google.adk.agents import Agent

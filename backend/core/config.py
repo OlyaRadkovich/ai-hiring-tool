@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     ]
 
     google_api_key: str
+    assemblyai_api_key: str
+    google_application_credentials: str
 
 
 settings = Settings()
