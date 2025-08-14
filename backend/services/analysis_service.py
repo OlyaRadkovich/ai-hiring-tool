@@ -23,6 +23,8 @@ from google.genai import types
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
+from docx import Document
+from docx.shared import Pt
 
 
 class AnalysisService:
@@ -235,3 +237,70 @@ class AnalysisService:
             logger.error(f"Проблемный JSON от Агента 5: {agent_5_output}")
             logger.error(f"Проблемный JSON от Агента 6: {agent_6_output}")
             raise ValueError("AI-сервис вернул некорректный формат данных.")
+
+    def create_docx_report(self, results: ResultsAnalysis) -> io.BytesIO:
+        """Создает отчет в формате DOCX из результатов анализа."""
+
+        document = Document()
+
+
+        heading = document.add_heading('Отчет по результатам интервью', level=1)
+        run = heading.runs[0]
+        run.font.name = 'Calibri'
+        run.font.size = Pt(18)
+
+        document.add_heading('Финальная рекомендация', level=2)
+        p = document.add_paragraph()
+
+        run_verdict_label = p.add_run("Вердикт: ")
+        run_verdict_label.bold = True
+        run_verdict_label.font.name = 'Calibri'
+        run_verdict_label.font.size = Pt(12)
+
+        run_verdict_text = p.add_run(results.recommendation)
+        run_verdict_text.font.name = 'Calibri'
+        run_verdict_text.font.size = Pt(12)
+
+        p_reasoning = document.add_paragraph(results.reasoning)
+        for run in p_reasoning.runs:
+            run.font.name = 'Calibri'
+            run.font.size = Pt(12)
+
+        document.add_heading('Оценка компетенций', level=2)
+        table = document.add_table(rows=1, cols=2)
+        table.style = 'Table Grid'
+        hdr_cells = table.rows[0].cells
+        hdr_cells[0].text = 'Компетенция'
+        hdr_cells[1].text = 'Оценка (%)'
+
+        for key, value in results.scores.model_dump().items():
+            row_cells = table.add_row().cells
+            row_cells[0].text = key.capitalize()
+            row_cells[1].text = str(value)
+
+        for row in table.rows:
+            for cell in row.cells:
+                for paragraph in cell.paragraphs:
+                    for run in paragraph.runs:
+                        run.font.name = 'Calibri'
+                        run.font.size = Pt(10)
+
+        document.add_heading('Ключевые сильные стороны', level=2)
+        for strength in results.strengths:
+            p_strength = document.add_paragraph(strength, style='List Bullet')
+            for run in p_strength.runs:
+                run.font.name = 'Calibri'
+                run.font.size = Pt(12)
+
+        document.add_heading('Области для улучшения', level=2)
+        for concern in results.concerns:
+            p_concern = document.add_paragraph(concern, style='List Bullet')
+            for run in p_concern.runs:
+                run.font.name = 'Calibri'
+                run.font.size = Pt(12)
+
+        file_stream = io.BytesIO()
+        document.save(file_stream)
+        file_stream.seek(0)
+
+        return file_stream

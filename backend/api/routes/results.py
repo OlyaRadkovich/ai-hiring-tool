@@ -4,6 +4,7 @@ from backend.api.models import ResultsAnalysis, ErrorResponse
 from backend.services.analysis_service import AnalysisService
 from backend.api.deps import get_analysis_service
 from googleapiclient.errors import HttpError
+from fastapi.responses import StreamingResponse
 
 router = APIRouter()
 
@@ -68,4 +69,34 @@ async def analyze_results_endpoint(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Произошла внутренняя ошибка сервера: {str(e)}"
+        )
+
+
+@router.post(
+    "/export",
+    summary="Экспорт отчета в DOCX",
+    description="Принимает JSON с результатами анализа и возвращает DOCX файл.",
+    response_class=StreamingResponse
+)
+async def export_results_endpoint(
+        results: ResultsAnalysis,
+        analysis_service: AnalysisService = Depends(get_analysis_service)
+):
+    try:
+        file_stream = analysis_service.create_docx_report(results)
+
+        headers = {
+            'Content-Disposition': 'attachment; filename="Interview_Report.docx"'
+        }
+
+        return StreamingResponse(
+            file_stream,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers=headers
+        )
+    except Exception as e:
+        logger.error(f"Ошибка при создании DOCX отчета: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Не удалось сгенерировать DOCX отчет: {str(e)}"
         )
