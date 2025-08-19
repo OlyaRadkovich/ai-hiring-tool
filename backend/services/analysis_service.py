@@ -9,8 +9,8 @@ from backend.api.models import PreparationAnalysis, ResultsAnalysis, ScoreBreakd
 from ..core.config import settings
 
 from backend.agents.pipeline_1_pre_interview.agent_1_data_parser import agent_1_data_parser
-from backend.agents.pipeline_1_pre_interview.agent_2_profiler import agent_2_profiler
-from backend.agents.pipeline_1_pre_interview.agent_3_plan_generator import agent_3_plan_generator
+from backend.agents.pipeline_1_pre_interview.agent_2_grader import agent_2_grader
+from backend.agents.pipeline_1_pre_interview.agent_3_report_generator import agent_3_report_generator
 from backend.agents.pipeline_2_post_interview.agent_4_topic_extractor import agent_4_topic_extractor
 from backend.agents.pipeline_2_post_interview.agent_5_final_report_generator import agent_5_final_report_generator
 
@@ -25,6 +25,8 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 from docx import Document
 from docx.shared import Pt
+from pypdf import PdfReader
+from google.adk.agents import Agent
 
 
 class AnalysisService:
@@ -140,6 +142,18 @@ class AnalysisService:
             logger.error(f"Ошибка при чтении файла {filename}: {e}")
             raise ValueError(f"Could not process file: {filename}")
 
+        try:
+            with open("backend/resources/Ожидания.pdf", "rb") as f:
+                reader = PdfReader(f)
+                expectations_text = "\n".join(page.extract_text() for page in reader.pages)
+
+            with open("backend/resources/Ценности, Миссия и Портрет сотрудника.pdf", "rb") as f:
+                reader = PdfReader(f)
+                values_text = "\n".join(page.extract_text() for page in reader.pages)
+        except FileNotFoundError as e:
+            logger.error(f"Не найден файл с ресурсами: {e}")
+            raise ValueError(f"Не удалось загрузить файл с ожиданиями или ценностями компании.")
+
         session_service = InMemorySessionService()
         session_id = f"prep_session_{os.urandom(8).hex()}"
         user_id = "prep_user"
@@ -153,17 +167,40 @@ class AnalysisService:
         async for event in runner_1.run_async(session_id=session_id, user_id=user_id, new_message=message_for_agent_1):
             if event.content and event.content.parts:
                 agent_1_output += "".join(part.text for part in event.content.parts if part.text)
+                
+        new_instruction_for_agent_2 = f"""
+        {agent_2_grader.instruction}
 
-        logger.info("🚀 Запуск agent_2_profiler...")
-        runner_2 = Runner(agent=agent_2_profiler, app_name=settings.app_name, session_service=session_service)
+        ### ДОПОЛНИТЕЛЬНЫЙ КОНТЕКСТ ДЛЯ АНАЛИЗА ###
+
+        Вот информация об ожиданиях от кандидатов разных грейдов (из файла 'Ожидания.pdf'):
+        ---
+        {expectations_text}
+        ---
+
+        А вот информация о ценностях компании (из файла 'Ценности, Миссия и Портрет сотрудника.pdf'):
+        ---
+        {values_text}
+        ---
+        """
+
+        temp_agent_2_grader = Agent(
+            name=agent_2_grader.name,
+            model=agent_2_grader.model,
+            description=agent_2_grader.description,
+            instruction=new_instruction_for_agent_2
+        )
+
+        logger.info("🚀 Запуск agent_2_grader...")
+        runner_2 = Runner(agent=temp_agent_2_grader, app_name=settings.app_name, session_service=session_service)
         message_for_agent_2 = types.Content(role="user", parts=[types.Part(text=agent_1_output)])
         agent_2_output = ""
         async for event in runner_2.run_async(session_id=session_id, user_id=user_id, new_message=message_for_agent_2):
             if event.content and event.content.parts:
                 agent_2_output += "".join(part.text for part in event.content.parts if part.text)
 
-        logger.info("🚀 Запуск agent_3_plan_generator...")
-        runner_3 = Runner(agent=agent_3_plan_generator, app_name=settings.app_name, session_service=session_service)
+        logger.info("🚀 Запуск agent_3_report_generator...")
+        runner_3 = Runner(agent=agent_3_report_generator, app_name=settings.app_name, session_service=session_service)
         message_for_agent_3 = types.Content(role="user", parts=[types.Part(text=agent_2_output)])
         final_output = ""
         async for event in runner_3.run_async(session_id=session_id, user_id=user_id, new_message=message_for_agent_3):
@@ -174,11 +211,20 @@ class AnalysisService:
         try:
             clean_json_str = final_output.strip().replace("```json", "").replace("```", "").strip()
             data = json.loads(clean_json_str)
-            data["message"] = "Interview preparation plan created successfully."
-            return PreparationAnalysis(**data)
+
+            final_response_data = {
+                "message": "Interview preparation report created successfully.",
+                **data
+            }
+            return PreparationAnalysis(**final_response_data)
+
         except json.JSONDecodeError as e:
             logger.error(f"Ошибка декодирования JSON от Агента 3: {e}\nПолученный текст: {final_output}")
             raise ValueError("AI-сервис вернул некорректный формат данных.")
+        except Exception as e:
+            logger.error(f"Ошибка валидации Pydantic или другая ошибка: {e}")
+            raise ValueError(f"Ошибка при формировании итогового ответа: {e}")
+
 
     async def analyze_results(self, video_link: str, matrix_content: bytes) -> ResultsAnalysis:
         logger.info("🚀 Запуск Пайплайна 2: Анализ результатов интервью...")
@@ -196,21 +242,21 @@ class AnalysisService:
         user_id = "results_user"
         await session_service.create_session(app_name=settings.app_name, user_id=user_id, session_id=session_id)
 
-        logger.info("🚀 Запуск agent_5_topic_extractor...")
-        runner_5 = Runner(agent=agent_4_topic_extractor, app_name=settings.app_name, session_service=session_service)
+        logger.info("🚀 Запуск agent_4_topic_extractor...")
+        runner_4 = Runner(agent=agent_4_topic_extractor, app_name=settings.app_name, session_service=session_service)
         message_for_agent_5 = types.Content(role="user", parts=[types.Part(text=transcription_text)])
         agent_5_output = ""
-        async for event in runner_5.run_async(session_id=session_id, user_id=user_id, new_message=message_for_agent_5):
+        async for event in runner_4.run_async(session_id=session_id, user_id=user_id, new_message=message_for_agent_5):
             if event.content and event.content.parts:
                 agent_5_output += "".join(part.text for part in event.content.parts if part.text)
 
-        logger.info("🚀 Запуск agent_6_final_report_generator...")
-        runner_6 = Runner(agent=agent_5_final_report_generator, app_name=settings.app_name,
+        logger.info("🚀 Запуск agent_5_final_report_generator...")
+        runner_5 = Runner(agent=agent_5_final_report_generator, app_name=settings.app_name,
                           session_service=session_service)
         combined_input_for_agent_6 = f"### Транскрипция интервью:\n{transcription_text}\n\n### Матрица компетенций:\n{matrix_content.decode('utf-8', errors='ignore')}"
         message_for_agent_6 = types.Content(role="user", parts=[types.Part(text=combined_input_for_agent_6)])
         agent_6_output = ""
-        async for event in runner_6.run_async(session_id=session_id, user_id=user_id, new_message=message_for_agent_6):
+        async for event in runner_5.run_async(session_id=session_id, user_id=user_id, new_message=message_for_agent_6):
             if event.content and event.content.parts:
                 agent_6_output += "".join(part.text for part in event.content.parts if part.text)
 

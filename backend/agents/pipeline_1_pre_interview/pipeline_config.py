@@ -1,10 +1,9 @@
-# -*- coding: utf-8 -*-
 from google.adk.agents.sequential_agent import SequentialAgent
 from google.adk.agents import Agent
 
 from .agent_1_data_parser import agent_1_data_parser
-from .agent_2_profiler import agent_2_profiler
-from .agent_3_plan_generator import agent_3_plan_generator
+from .agent_2_grader import agent_2_grader
+from .agent_3_report_generator import agent_3_report_generator
 
 
 def create_pre_interview_pipeline(api_key: str):
@@ -17,19 +16,19 @@ def create_pre_interview_pipeline(api_key: str):
     )
 
     agent_2 = Agent(
-        name=agent_2_profiler.name,
-        model=agent_2_profiler.model,
-        description=agent_2_profiler.description,
-        instruction=agent_2_profiler.instruction,
-        tools=agent_2_profiler.tools
+        name=agent_2_grader.name,
+        model=agent_2_grader.model,
+        description=agent_2_grader.description,
+        instruction=agent_2_grader.instruction,
+        tools=agent_2_grader.tools
     )
 
     agent_3 = Agent(
-        name=agent_3_plan_generator.name,
-        model=agent_3_plan_generator.model,
-        description=agent_3_plan_generator.description,
-        instruction=agent_3_plan_generator.instruction,
-        tools=agent_3_plan_generator.tools
+        name=agent_3_report_generator.name,
+        model=agent_3_report_generator.model,
+        description=agent_3_report_generator.description,
+        instruction=agent_3_report_generator.instruction,
+        tools=agent_3_report_generator.tools
     )
 
     return SequentialAgent(
