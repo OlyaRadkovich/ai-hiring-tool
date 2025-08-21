@@ -143,13 +143,11 @@ class AnalysisService:
             raise ValueError(f"Could not process file: {filename}")
 
         try:
-            with open("backend/resources/expectations-QA_AQA.csv", "rb") as f:
-                reader = PdfReader(f)
-                expectations_text = "\n".join(page.extract_text() for page in reader.pages)
+            with open("backend/resources/expectations-QA_AQA.csv", "r", encoding="utf-8") as f:
+                expectations_text = f.read()
 
-            with open("backend/resources/values-mission-portrait.csv", "rb") as f:
-                reader = PdfReader(f)
-                values_text = "\n".join(page.extract_text() for page in reader.pages)
+            with open("backend/resources/values-mission-portrait.csv", "r", encoding="utf-8") as f:
+                values_text = f.read()
         except FileNotFoundError as e:
             logger.error(f"Не найден файл с ресурсами: {e}")
             raise ValueError(f"Не удалось загрузить файл с ожиданиями или ценностями компании.")
@@ -167,7 +165,7 @@ class AnalysisService:
         async for event in runner_1.run_async(session_id=session_id, user_id=user_id, new_message=message_for_agent_1):
             if event.content and event.content.parts:
                 agent_1_output += "".join(part.text for part in event.content.parts if part.text)
-                
+
         new_instruction_for_agent_2 = f"""
         {agent_2_grader.instruction}
 
@@ -224,7 +222,6 @@ class AnalysisService:
         except Exception as e:
             logger.error(f"Ошибка валидации Pydantic или другая ошибка: {e}")
             raise ValueError(f"Ошибка при формировании итогового ответа: {e}")
-
 
     async def analyze_results(self, video_link: str, matrix_content: bytes) -> ResultsAnalysis:
         logger.info("🚀 Запуск Пайплайна 2: Анализ результатов интервью...")
@@ -288,7 +285,6 @@ class AnalysisService:
         """Создает отчет в формате DOCX из результатов анализа."""
 
         document = Document()
-
 
         heading = document.add_heading('Отчет по результатам интервью', level=1)
         run = heading.runs[0]

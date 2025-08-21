@@ -1,88 +1,107 @@
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
-import { Upload, FileText, Brain, Download, Edit3, CheckCircle, AlertTriangle, XCircle, User, FileCheck, Lightbulb, HeartHandshake, BookOpen } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+// Файл: src/components/InterviewPreparation.tsx
 
-// Определяем типы для нового ответа от API
-interface MatchItem {
+import React, { useState } from 'react';
+import { Button } from './ui/button';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from './ui/card';
+import { Textarea } from './ui/textarea';
+import { Input } from './ui/input';
+import { Label } from './ui/label';
+import { Table, TableBody, TableCell, TableHeader, TableHead, TableRow } from './ui/table';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { toast } from './ui/use-toast';
+import { Loader2 } from 'lucide-react';
+
+// 1. ОБНОВЛЕНЫ ТИПЫ ДАННЫХ
+interface InterviewTopic {
+  topic: string;
+  questions: string[];
+}
+
+interface MatchingItem {
   criterion: string;
-  match: 'full' | 'partial' | 'none' | string; // string для гибкости
+  match: string;
   comment: string;
 }
 
 interface Conclusion {
   summary: string;
   recommendations: string;
-  interview_topics: string[];
+  interview_topics: InterviewTopic[]; // <-- ИЗМЕНЕНИЕ
   values_assessment: string;
 }
 
 interface Report {
-  matching_table: MatchItem[];
+  first_name: string | null;
+  last_name: string | null;
+  matching_table: MatchingItem[];
   candidate_profile: string;
   conclusion: Conclusion;
 }
 
 interface AnalysisResponse {
+  message: string;
+  success: boolean;
   report: Report;
-  message?: string;
 }
 
-// Компонент для иконок соответствия
-const MatchIcon = ({ match }: { match: MatchItem['match'] }) => {
-  switch (match) {
-    case 'full':
-      return <CheckCircle className="w-5 h-5 text-green-500" />;
-    case 'partial':
-      return <AlertTriangle className="w-5 h-5 text-yellow-500" />;
-    case 'none':
-      return <XCircle className="w-5 h-5 text-red-500" />;
-    default:
-      return null;
-  }
-};
-
-
-export default function InterviewPreparation() {
+const InterviewPreparation: React.FC = () => {
   const [cvFile, setCvFile] = useState<File | null>(null);
-  const [candidateProfile, setCandidateProfile] = useState("");
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [profile, setProfile] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const [analysisResponse, setAnalysisResponse] = useState<AnalysisResponse | null>(null);
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setCvFile(file);
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files) {
+      setCvFile(event.target.files[0]);
     }
   };
 
-  const handleAnalyze = async () => {
-    if (!cvFile) return;
-    setIsAnalyzing(true);
+  const handleSubmit = async () => {
+    if (!cvFile || !profile) {
+      toast({
+        title: "Ошибка",
+        description: "Пожалуйста, загрузите резюме и заполните профиль кандидата.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoading(true);
     setAnalysisResponse(null);
+
+    const formData = new FormData();
+    formData.append('cv_file', cvFile);
+    formData.append('profile', profile);
+
     try {
-      const form = new FormData();
-      form.append("profile", candidateProfile);
-      form.append("cv_file", cvFile);
-      const res = await fetch("/api/prep/", { method: "POST", body: form });
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.detail || "Analyze failed");
+      const response = await fetch('http://localhost:8000/api/prep/', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || 'Произошла неизвестная ошибка');
       }
-      const data = await res.json();
+
       setAnalysisResponse(data);
-    } catch (err) {
-      console.error(err);
+      toast({
+        title: "Успех",
+        description: "Анализ успешно завершен.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Ошибка анализа",
+        description: error.message,
+        variant: "destructive",
+      });
     } finally {
-      setIsAnalyzing(false);
+      setIsLoading(false);
     }
   };
-
+  
   const handleExportPdf = async () => {
     if (!analysisResponse?.report) {
       alert("Нет данных для генерации отчета.");
@@ -127,18 +146,22 @@ export default function InterviewPreparation() {
     doc.setFontSize(14);
     doc.text(`${report.first_name || ''} ${report.last_name || ''}`, 14, 30);
 
-    const profileY = 30 + 10; // y = 40
+    const profileY = 30 + 10;
     doc.setFontSize(12);
     doc.text(`Предполагаемый профиль: ${report.candidate_profile}`, 14, profileY);
 
-    const tableTitleY = profileY + 15; // y = 55
+    const tableTitleY = profileY + 15;
     doc.setFont('Roboto', 'bold');
     doc.setFontSize(14);
     doc.text("Соответствие ключевым критериям", 14, tableTitleY);
+
     autoTable(doc, {
       startY: tableTitleY + 5,
       head: [['Критерий', 'Соответствие', 'Пояснение']],
-      body: report.matching_table.map(item => [item.criterion, item.match, item.comment]),
+      body: report.matching_table.map(item => {
+        const capitalizedCriterion = item.criterion.charAt(0).toUpperCase() + item.criterion.slice(1);
+        return [capitalizedCriterion, item.match, item.comment];
+      }),
       theme: 'grid',
       styles: { font: 'Roboto', fontSize: 10 },
       headStyles: { fillColor: [41, 128, 185], fontStyle: 'bold' },
@@ -151,7 +174,6 @@ export default function InterviewPreparation() {
 
     let lastY = (doc as any).lastAutoTable.finalY + 15;
 
-    // Функция для добавления текстовых блоков
     const addTextBlock = (title: string, content: string) => {
       if (lastY > 260) {
           doc.addPage();
@@ -160,221 +182,151 @@ export default function InterviewPreparation() {
       doc.setFont('Roboto', 'bold');
       doc.setFontSize(14);
       doc.text(title, 14, lastY);
+      lastY += 7;
       doc.setFont('Roboto', 'normal');
       doc.setFontSize(10);
       const splitText = doc.splitTextToSize(content, 180);
-      doc.text(splitText, 14, lastY + 7);
-      lastY += 10 + splitText.length * 5; // Динамический расчет высоты
+      doc.text(splitText, 14, lastY);
+      lastY += splitText.length * 5 + 5;
     };
 
     addTextBlock("Общий вывод", report.conclusion.summary);
     addTextBlock("Рекомендации по развитию", report.conclusion.recommendations);
-    addTextBlock("Темы для технического интервью", report.conclusion.interview_topics.join('\n'));
-    addTextBlock("Соответствие ценностям компании", report.conclusion.values_assessment);
+    
+    // 3. ОБНОВЛЕНА ЛОГИКА ГЕНЕРАЦИИ PDF ДЛЯ ТЕМ И ВОПРОСОВ
+    if (lastY > 260) {
+      doc.addPage();
+      lastY = 20;
+    }
+    doc.setFont('Roboto', 'bold');
+    doc.setFontSize(14);
+    doc.text("Темы для технического интервью", 14, lastY);
+    lastY += 7;
+
+    report.conclusion.interview_topics.forEach(topicItem => {
+      if (lastY > 270) {
+        doc.addPage();
+        lastY = 20;
+      }
+      doc.setFont('Roboto', 'bold');
+      doc.setFontSize(10);
+      const splitTopic = doc.splitTextToSize(topicItem.topic, 180);
+      doc.text(splitTopic, 14, lastY);
+      lastY += splitTopic.length * 5;
+
+      doc.setFont('Roboto', 'normal');
+      topicItem.questions.forEach(question => {
+        if (lastY > 275) {
+          doc.addPage();
+          lastY = 20;
+        }
+        const splitQuestion = doc.splitTextToSize(`- ${question}`, 175);
+        doc.text(splitQuestion, 18, lastY);
+        lastY += splitQuestion.length * 5;
+      });
+      lastY += 4;
+    });
+
+    addTextBlock("Оценка соответствия ценностям", report.conclusion.values_assessment);
 
     doc.save("Отчет_по_кандидату.pdf");
   };
 
-  const report = analysisResponse?.report;
 
   return (
-    <div className="space-y-6">
-      {/* Секция загрузки и анализа (без изменений) */}
-       <div className="grid md:grid-cols-2 gap-6">
-        <Card className="shadow-card">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Upload className="w-5 h-5 text-primary" />
-              <span>Upload Candidate CV</span>
-            </CardTitle>
-            <CardDescription>
-              Upload the candidate's CV in PDF or DOCX format
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:border-primary/50 transition-colors">
-              <input
-                type="file"
-                id="cv-upload"
-                accept=".pdf,.docx"
-                onChange={handleFileUpload}
-                className="hidden"
-              />
-              <label htmlFor="cv-upload" className="cursor-pointer">
-                <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-sm text-muted-foreground mb-2">
-                  {cvFile ? cvFile.name : "Click to upload CV"}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  PDF or DOCX up to 10MB
-                </p>
-              </label>
-            </div>
-            {cvFile && (
-              <Badge variant="secondary" className="mt-4">
-                ✓ {cvFile.name} uploaded
-              </Badge>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-card">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Edit3 className="w-5 h-5 text-accent" />
-              <span>Candidate Profile</span>
-            </CardTitle>
-            <CardDescription>
-              Required Candidate Profile and Recruiter’s Feedback
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Textarea
-              placeholder="E.g., Senior Frontend Developer with 5+ years experience in React, TypeScript, and team leadership. Looking for someone who can architect scalable solutions and mentor junior developers..."
-              value={candidateProfile}
-              onChange={(e) => setCandidateProfile(e.target.value)}
-              className="min-h-[120px] resize-none"
-            />
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="text-center">
-        <Button
-          onClick={handleAnalyze}
-          disabled={!cvFile || !candidateProfile || isAnalyzing}
-          className="bg-gradient-primary hover:shadow-glow transition-all duration-300 px-8"
-          size="lg"
-        >
-          {isAnalyzing ? (
-            <>
-              <Brain className="w-5 h-5 mr-2 animate-spin" />
-              Analyzing with AI...
-            </>
-          ) : (
-            <>
-              <Brain className="w-5 h-5 mr-2" />
-              Generate Interview Preparation
-            </>
-          )}
-        </Button>
-      </div>
-
-      {/* НОВЫЙ БЛОК ОТОБРАЖЕНИЯ РЕЗУЛЬТАТОВ */}
-      {report && (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h3 className="text-2xl font-bold">AI Analysis Report</h3>
-            <Button variant="outline" size="sm" onClick={handleExportPdf}>
-              <Download className="w-4 h-4 mr-2" />
-              Export PDF Report
-            </Button>
+    <div className="container mx-auto p-4">
+      <h1 className="text-3xl font-bold mb-4">Подготовка к интервью</h1>
+      <Card>
+        <CardHeader>
+          <CardTitle>Предварительная оценка кандидата</CardTitle>
+          <CardDescription>Загрузите резюме и фидбэк рекрутера (опционально) для генерации оценки и плана интервью.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid w-full max-w-sm items-center gap-1.5">
+            <Label htmlFor="cv-file">Резюме (.txt, .pdf, .docx)</Label>
+            <Input id="cv-file" type="file" onChange={handleFileChange} accept=".txt,.pdf,.docx" />
           </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="profile">Фидбэк рекрутера</Label>
+            <Textarea
+              id="profile"
+              value={profile}
+              onChange={(e) => setProfile(e.target.value)}
+              placeholder="Вставьте сюда текст..."
+              rows={10}
+            />
+          </div>
+        </CardContent>
+        <CardFooter>
+          <Button onClick={handleSubmit} disabled={isLoading}>
+            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {isLoading ? 'Анализ...' : 'Начать анализ'}
+          </Button>
+        </CardFooter>
+      </Card>
 
-          {/* Профиль кандидата */}
-          <Card className="shadow-card">
-              <CardHeader>
-                  <CardTitle className="flex items-center space-x-3">
-                      <User className="w-6 h-6 text-primary" />
-                      <span>Candidate Profile</span>
-                  </CardTitle>
-              </CardHeader>
-              <CardContent>
-                  <Badge variant="default" className="text-base px-4 py-2">{report.candidate_profile}</Badge>
-              </CardContent>
-          </Card>
-
-          {/* Таблица соответствия */}
-          <Card className="shadow-card">
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-3">
-                  <FileCheck className="w-6 h-6 text-primary" />
-                  <span>Compliance with Key Criteria</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
+      {analysisResponse && (
+        <Card className="mt-6">
+          <CardHeader>
+            <div className="flex justify-between items-center">
+              <CardTitle>Результаты анализа</CardTitle>
+              <Button onClick={handleExportPdf} variant="outline">Экспорт в PDF</Button>
+            </div>
+            <CardDescription>
+              {`Профиль: ${analysisResponse.report.candidate_profile} (${analysisResponse.report.first_name || ''} ${analysisResponse.report.last_name || ''})`}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <h3 className="font-bold text-lg mb-2">Соответствие ключевым критериям</h3>
+            <div className="border rounded-md">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[100px]">Match</TableHead>
-                    <TableHead>Criterion</TableHead>
-                    <TableHead>Comment</TableHead>
+                    <TableHead className="w-[40%]">Критерий</TableHead>
+                    <TableHead className="w-[15%]">Соответствие</TableHead>
+                    <TableHead>Пояснение</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {report.matching_table.map((item, index) => (
+                  {analysisResponse.report.matching_table.map((item, index) => (
                     <TableRow key={index}>
-                      <TableCell className="font-medium">
-                        <div className="flex items-center justify-center">
-                           <MatchIcon match={item.match} />
-                        </div>
-                      </TableCell>
                       <TableCell>{item.criterion}</TableCell>
+                      <TableCell>{item.match}</TableCell>
                       <TableCell>{item.comment}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
-            </CardContent>
-          </Card>
+            </div>
 
-          {/* Выводы */}
-          <div className="grid md:grid-cols-2 gap-6">
-            <Card className="shadow-card">
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-3">
-                  <Lightbulb className="w-6 h-6 text-primary" />
-                  <span>Overall Conclusion</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                  <p className="text-sm text-muted-foreground leading-relaxed">{report.conclusion.summary}</p>
-              </CardContent>
-            </Card>
-            <Card className="shadow-card">
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-3">
-                  <BookOpen className="w-6 h-6 text-primary" />
-                  <span>Recommendations for Development</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                  <p className="text-sm text-muted-foreground leading-relaxed">{report.conclusion.recommendations}</p>
-              </CardContent>
-            </Card>
-          </div>
+            <h3 className="font-bold text-lg mt-4 mb-2">Общий вывод</h3>
+            <p className="text-sm">{analysisResponse.report.conclusion.summary}</p>
 
-          <Card className="shadow-card">
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-3">
-                  <HeartHandshake className="w-6 h-6 text-primary" />
-                  <span>Values Alignment Assessment</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                  <p className="text-sm text-muted-foreground leading-relaxed">{report.conclusion.values_assessment}</p>
-              </CardContent>
-          </Card>
+            <h3 className="font-bold text-lg mt-4 mb-2">Рекомендации по развитию</h3>
+            <p className="text-sm">{analysisResponse.report.conclusion.recommendations}</p>
 
-           <Card className="shadow-card">
-            <CardHeader>
-              <CardTitle>Topics for Technical Interview</CardTitle>
-              <CardDescription>
-                Based on the candidate's CV and your requirements
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-2">
-                {report.conclusion.interview_topics.map((topic, index) => (
-                  <Badge key={index} variant="secondary" className="px-3 py-1">
-                    {topic}
-                  </Badge>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+            {/* 2. ОБНОВЛЕНА ЛОГИКА ОТОБРАЖЕНИЯ ТЕМ И ВОПРОСОВ */}
+            <h3 className="font-bold text-lg mt-4 mb-2">Темы для технического интервью</h3>
+            <div className="space-y-3">
+              {analysisResponse.report.conclusion.interview_topics.map((topicItem, index) => (
+                <div key={index}>
+                  <h4 className="font-semibold">{topicItem.topic}</h4>
+                  <ul className="list-disc list-inside text-sm space-y-1 mt-1">
+                    {topicItem.questions.map((question, qIndex) => (
+                      <li key={qIndex}>{question}</li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+
+            <h3 className="font-bold text-lg mt-4 mb-2">Соответствие ценностям компании</h3>
+            <p className="text-sm">{analysisResponse.report.conclusion.values_assessment}</p>
+          </CardContent>
+        </Card>
       )}
     </div>
   );
-}
+};
+
+export default InterviewPreparation;

@@ -21,7 +21,7 @@ class Conclusion(BaseModel):
     values_assessment: str
 
 class Report(BaseModel):
-    first_name: Optional[str] = None # Добавлено
+    first_name: Optional[str] = None
     last_name: Optional[str] = None
     matching_table: List[MatchingItem]
     candidate_profile: str
