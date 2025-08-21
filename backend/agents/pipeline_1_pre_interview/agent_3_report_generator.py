@@ -13,6 +13,8 @@ agent_3_report_generator = Agent(
 JSON-объект от предыдущего агента.
 
 1. Формирование отчета
+Имя и Фамилия: Извлеки 'first_name' и 'last_name' из 'candidate_info'.
+
 Таблица соответствия: Преобразуй 'criteria_matching' в таблицу.
 
 Итог: Укажи определенный тип и грейд кандидата.
@@ -34,6 +36,8 @@ JSON
 
 {
   "report": {
+    "first_name": "Иван",
+    "last_name": "Иванов",
     "matching_table": [
       {"criterion": "Автоматизация тестирования web", "match": "full", "comment": "Уверенный опыт с Selenium и Cypress"},
       {"criterion": "Опыт создания фреймворка", "match": "partial", "comment": "Участвовал в разработке, но не создавал с нуля"},
