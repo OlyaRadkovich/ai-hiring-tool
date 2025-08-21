@@ -91,7 +91,6 @@ export default function InterviewPreparation() {
     const { report } = analysisResponse;
     const doc = new jsPDF();
 
-    // Логика добавления шрифтов (оставлена без изменений)
     try {
       const fontResponse = await fetch('/fonts/Roboto-Regular.ttf');
       const fontBlob = await fontResponse.blob();
@@ -123,22 +122,31 @@ export default function InterviewPreparation() {
 
     doc.setFont('Roboto', 'bold');
     doc.setFontSize(18);
-    doc.text("AI Interview Preparation Report", 14, 20);
+    doc.text("Предварительная оценка кандидата", 14, 20);
 
+    doc.setFontSize(14);
+    doc.text(`${report.first_name || ''} ${report.last_name || ''}`, 14, 30);
+
+    const profileY = 30 + 10; // y = 40
     doc.setFontSize(12);
-    doc.text(`Candidate Profile: ${report.candidate_profile}`, 14, 30);
+    doc.text(`Предполагаемый профиль: ${report.candidate_profile}`, 14, profileY);
 
-    // Таблица соответствия
+    const tableTitleY = profileY + 15; // y = 55
     doc.setFont('Roboto', 'bold');
     doc.setFontSize(14);
-    doc.text("Compliance with Key Criteria", 14, 45);
+    doc.text("Соответствие ключевым критериям", 14, tableTitleY);
     autoTable(doc, {
-      startY: 50,
-      head: [['Criterion', 'Match', 'Comment']],
+      startY: tableTitleY + 5,
+      head: [['Критерий', 'Соответствие', 'Пояснение']],
       body: report.matching_table.map(item => [item.criterion, item.match, item.comment]),
       theme: 'grid',
       styles: { font: 'Roboto', fontSize: 10 },
       headStyles: { fillColor: [41, 128, 185], fontStyle: 'bold' },
+      columnStyles: {
+        0: { cellWidth: 55 },
+        1: { cellWidth: 35 },
+        2: { cellWidth: 'auto' }
+      },
     });
 
     let lastY = (doc as any).lastAutoTable.finalY + 15;
@@ -159,12 +167,12 @@ export default function InterviewPreparation() {
       lastY += 10 + splitText.length * 5; // Динамический расчет высоты
     };
 
-    addTextBlock("Overall Conclusion", report.conclusion.summary);
-    addTextBlock("Recommendations for Development", report.conclusion.recommendations);
-    addTextBlock("Topics for Technical Interview", report.conclusion.interview_topics.join('\n'));
-    addTextBlock("Values Alignment Assessment", report.conclusion.values_assessment);
+    addTextBlock("Общий вывод", report.conclusion.summary);
+    addTextBlock("Рекомендации по развитию", report.conclusion.recommendations);
+    addTextBlock("Темы для технического интервью", report.conclusion.interview_topics.join('\n'));
+    addTextBlock("Соответствие ценностям компании", report.conclusion.values_assessment);
 
-    doc.save("Interview_Preparation_Report.pdf");
+    doc.save("Отчет_по_кандидату.pdf");
   };
 
   const report = analysisResponse?.report;
