@@ -143,11 +143,11 @@ class AnalysisService:
             raise ValueError(f"Could not process file: {filename}")
 
         try:
-            with open("backend/resources/Ожидания.pdf", "rb") as f:
+            with open("backend/resources/expectations-QA_AQA.csv", "rb") as f:
                 reader = PdfReader(f)
                 expectations_text = "\n".join(page.extract_text() for page in reader.pages)
 
-            with open("backend/resources/Ценности, Миссия и Портрет сотрудника.pdf", "rb") as f:
+            with open("backend/resources/values-mission-portrait.csv", "rb") as f:
                 reader = PdfReader(f)
                 values_text = "\n".join(page.extract_text() for page in reader.pages)
         except FileNotFoundError as e:
@@ -173,12 +173,12 @@ class AnalysisService:
 
         ### ДОПОЛНИТЕЛЬНЫЙ КОНТЕКСТ ДЛЯ АНАЛИЗА ###
 
-        Вот информация об ожиданиях от кандидатов разных грейдов (из файла 'Ожидания.pdf'):
+        Вот информация об ожиданиях от кандидатов разных грейдов (из файла 'expectations-QA_AQA.csv'):
         ---
         {expectations_text}
         ---
 
-        А вот информация о ценностях компании (из файла 'Ценности, Миссия и Портрет сотрудника.pdf'):
+        А вот информация о ценностях компании (из файла 'values-mission-portrait.csv'):
         ---
         {values_text}
         ---
