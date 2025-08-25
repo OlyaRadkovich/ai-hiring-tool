@@ -12,12 +12,6 @@ import autoTable from 'jspdf-autotable';
 import { toast } from './ui/use-toast';
 import { Loader2 } from 'lucide-react';
 
-// 1. ОБНОВЛЕНЫ ТИПЫ ДАННЫХ
-interface InterviewTopic {
-  topic: string;
-  questions: string[];
-}
-
 interface MatchingItem {
   criterion: string;
   match: string;
@@ -27,7 +21,7 @@ interface MatchingItem {
 interface Conclusion {
   summary: string;
   recommendations: string;
-  interview_topics: InterviewTopic[]; // <-- ИЗМЕНЕНИЕ
+  interview_topics: string[];
   values_assessment: string;
 }
 
@@ -101,7 +95,7 @@ const InterviewPreparation: React.FC = () => {
       setIsLoading(false);
     }
   };
-  
+
   const handleExportPdf = async () => {
     if (!analysisResponse?.report) {
       alert("Нет данных для генерации отчета.");
@@ -174,7 +168,7 @@ const InterviewPreparation: React.FC = () => {
 
     let lastY = (doc as any).lastAutoTable.finalY + 15;
 
-    const addTextBlock = (title: string, content: string) => {
+    const addTextBlock = (title: string, content: string | string[]) => {
       if (lastY > 260) {
           doc.addPage();
           lastY = 20;
@@ -185,48 +179,15 @@ const InterviewPreparation: React.FC = () => {
       lastY += 7;
       doc.setFont('Roboto', 'normal');
       doc.setFontSize(10);
-      const splitText = doc.splitTextToSize(content, 180);
+      const textToSplit = Array.isArray(content) ? content.join('\n') : content;
+      const splitText = doc.splitTextToSize(textToSplit, 180);
       doc.text(splitText, 14, lastY);
       lastY += splitText.length * 5 + 5;
     };
 
     addTextBlock("Общий вывод", report.conclusion.summary);
     addTextBlock("Рекомендации по развитию", report.conclusion.recommendations);
-    
-    // 3. ОБНОВЛЕНА ЛОГИКА ГЕНЕРАЦИИ PDF ДЛЯ ТЕМ И ВОПРОСОВ
-    if (lastY > 260) {
-      doc.addPage();
-      lastY = 20;
-    }
-    doc.setFont('Roboto', 'bold');
-    doc.setFontSize(14);
-    doc.text("Темы для технического интервью", 14, lastY);
-    lastY += 7;
-
-    report.conclusion.interview_topics.forEach(topicItem => {
-      if (lastY > 270) {
-        doc.addPage();
-        lastY = 20;
-      }
-      doc.setFont('Roboto', 'bold');
-      doc.setFontSize(10);
-      const splitTopic = doc.splitTextToSize(topicItem.topic, 180);
-      doc.text(splitTopic, 14, lastY);
-      lastY += splitTopic.length * 5;
-
-      doc.setFont('Roboto', 'normal');
-      topicItem.questions.forEach(question => {
-        if (lastY > 275) {
-          doc.addPage();
-          lastY = 20;
-        }
-        const splitQuestion = doc.splitTextToSize(`- ${question}`, 175);
-        doc.text(splitQuestion, 18, lastY);
-        lastY += splitQuestion.length * 5;
-      });
-      lastY += 4;
-    });
-
+    addTextBlock("Темы для технического интервью", report.conclusion.interview_topics.map(topic => `- ${topic}`));
     addTextBlock("Оценка соответствия ценностям", report.conclusion.values_assessment);
 
     doc.save("Отчет_по_кандидату.pdf");
@@ -238,8 +199,8 @@ const InterviewPreparation: React.FC = () => {
       <h1 className="text-3xl font-bold mb-4">Подготовка к интервью</h1>
       <Card>
         <CardHeader>
-          <CardTitle>Предварительная оценка кандидата</CardTitle>
-          <CardDescription>Загрузите резюме и фидбэк рекрутера (опционально) для генерации оценки и плана интервью.</CardDescription>
+          <CardTitle>Анализ кандидата</CardTitle>
+          <CardDescription>Загрузите резюме и вставьте требования к вакансии для генерации плана интервью.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid w-full max-w-sm items-center gap-1.5">
@@ -247,7 +208,7 @@ const InterviewPreparation: React.FC = () => {
             <Input id="cv-file" type="file" onChange={handleFileChange} accept=".txt,.pdf,.docx" />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="profile">Фидбэк рекрутера</Label>
+            <Label htmlFor="profile">Требования к вакансии и фидбэк рекрутера</Label>
             <Textarea
               id="profile"
               value={profile}
@@ -305,20 +266,12 @@ const InterviewPreparation: React.FC = () => {
             <h3 className="font-bold text-lg mt-4 mb-2">Рекомендации по развитию</h3>
             <p className="text-sm">{analysisResponse.report.conclusion.recommendations}</p>
 
-            {/* 2. ОБНОВЛЕНА ЛОГИКА ОТОБРАЖЕНИЯ ТЕМ И ВОПРОСОВ */}
             <h3 className="font-bold text-lg mt-4 mb-2">Темы для технического интервью</h3>
-            <div className="space-y-3">
-              {analysisResponse.report.conclusion.interview_topics.map((topicItem, index) => (
-                <div key={index}>
-                  <h4 className="font-semibold">{topicItem.topic}</h4>
-                  <ul className="list-disc list-inside text-sm space-y-1 mt-1">
-                    {topicItem.questions.map((question, qIndex) => (
-                      <li key={qIndex}>{question}</li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
+            <ul className="list-disc list-inside text-sm space-y-1">
+                {analysisResponse.report.conclusion.interview_topics.map((topic, index) => (
+                    <li key={index}>{topic}</li>
+                ))}
+            </ul>
 
             <h3 className="font-bold text-lg mt-4 mb-2">Соответствие ценностям компании</h3>
             <p className="text-sm">{analysisResponse.report.conclusion.values_assessment}</p>
