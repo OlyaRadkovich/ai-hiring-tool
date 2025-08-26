@@ -3,6 +3,7 @@ import json
 import io
 import re
 import asyncio
+from typing import Tuple
 from loguru import logger
 
 from backend.api.models import PreparationAnalysis, ResultsAnalysis, ScoreBreakdown
@@ -25,8 +26,6 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 from docx import Document
 from docx.shared import Pt
-from pypdf import PdfReader
-from google.adk.agents import Agent
 
 
 class AnalysisService:
@@ -42,9 +41,12 @@ class AnalysisService:
         self.drive_service = None
         try:
             credentials_path = settings.google_application_credentials
-            credentials = service_account.Credentials.from_service_account_file(credentials_path)
-            self.drive_service = build('drive', 'v3', credentials=credentials)
-            logger.success("Клиент Google Drive API успешно инициализирован.")
+            if os.path.exists(credentials_path):
+                credentials = service_account.Credentials.from_service_account_file(credentials_path)
+                self.drive_service = build('drive', 'v3', credentials=credentials)
+                logger.success("Клиент Google Drive API успешно инициализирован.")
+            else:
+                logger.error(f"Файл учетных данных Google не найден по пути: {credentials_path}")
         except Exception as e:
             logger.error(f"Ошибка инициализации клиента Google Drive API: {e}")
 
@@ -63,14 +65,44 @@ class AnalysisService:
         """
         Извлекает ID файла из ссылки на Google Drive.
         """
-        match = re.search(r'/file/d/([a-zA-Z0-9_-]+)', link)
-        if match:
-            return match.group(1)
+        patterns = [
+            r'/file/d/([a-zA-Z0-9_-]+)',
+            r'/spreadsheets/d/([a-zA-Z0-9_-]+)'
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, link)
+            if match:
+                return match.group(1)
         raise ValueError("Некорректная ссылка на Google Drive. Не удалось извлечь ID файла.")
+
+    async def _download_sheet_from_drive(self, file_id: str) -> str:
+        """
+        Загружает Google Таблицу как CSV и возвращает ее текстовое содержимое.
+        """
+        if not self.drive_service:
+            raise ConnectionError("Сервис Google Drive не инициализирован.")
+        logger.info(f"Начало загрузки таблицы с ID: {file_id} из Google Drive.")
+        try:
+            request = self.drive_service.files().export_media(fileId=file_id, mimeType='text/csv')
+            file_io = io.BytesIO()
+            downloader = MediaIoBaseDownload(file_io, request)
+
+            def download_in_thread():
+                done = False
+                while not done:
+                    _, done = downloader.next_chunk()
+
+            await asyncio.to_thread(download_in_thread)
+            logger.success(f"Таблица {file_id} успешно экспортирована в CSV.")
+            file_io.seek(0)
+            return file_io.read().decode('utf-8')
+        except Exception as e:
+            logger.error(f"Ошибка при экспорте таблицы из Google Drive: {e}", exc_info=True)
+            raise IOError(f"Не удалось загрузить требования из Google Drive: {e}")
 
     async def _download_audio_from_drive(self, file_id: str) -> io.BytesIO:
         """
-        Асинхронно загружает файл из Google Drive.
+        Асинхронно загружает аудио/видео файл из Google Drive.
         """
         if not self.drive_service:
             raise ConnectionError("Сервис Google Drive не инициализирован. Проверьте учетные данные.")
@@ -95,62 +127,42 @@ class AnalysisService:
             logger.error(f"Критическая ошибка при попытке скачать файл из Google Drive: {e}", exc_info=True)
             raise e
 
-    async def _transcribe_audio_assemblyai(self, audio_data: io.BytesIO) -> str:
+    def _read_file_content(self, file: io.BytesIO, filename: str) -> str:
         """
-        Транскрибирует аудио с помощью AssemblyAI SDK, запуская синхронный вызов в отдельном потоке.
+        Читает содержимое файла (PDF, DOCX, TXT) и возвращает текст.
         """
-        logger.info("Начало транскрипции аудио через AssemblyAI с автоопределением языка...")
-
-        config = aai.TranscriptionConfig(language_detection=True)
-        transcriber = aai.Transcriber(config=config)
-
-        def sync_transcribe_task():
-            logger.info("Запуск синхронной задачи транскрипции в отдельном потоке...")
-            return transcriber.transcribe(audio_data)
-
-        transcript = await asyncio.to_thread(sync_transcribe_task)
-
-        if transcript.status == aai.TranscriptStatus.error:
-            logger.error(f"Ошибка транскрипции AssemblyAI: {transcript.error}")
-            raise ValueError(f"Transcription failed: {transcript.error}")
-
-        logger.success("Транскрипция AssemblyAI успешно завершена.")
-
-        if not transcript.text:
-            logger.warning("Транскрипция вернула пустой текст.")
-
-        return transcript.text or ""
-
-    async def analyze_preparation(self, profile: str, cv_file: io.BytesIO, filename: str) -> PreparationAnalysis:
-        logger.info("Начало процесса подготовки к интервью (Пайплайн 1)...")
-
-        self._set_google_api_key()
-
         logger.info(f"Извлечение текста из файла: {filename}")
-        cv_text = ""
         try:
             if filename.lower().endswith('.pdf'):
-                reader = PdfReader(cv_file)
-                cv_text = "\n".join(page.extract_text() or "" for page in reader.pages)
+                reader = PdfReader(file)
+                return "\n".join(page.extract_text() or "" for page in reader.pages)
             elif filename.lower().endswith('.docx'):
-                doc = docx.Document(cv_file)
+                doc = docx.Document(file)
                 full_text = [para.text for para in doc.paragraphs if para.text.strip()]
-                cv_text = "\n".join(full_text)
+                return "\n".join(full_text)
             else:
-                cv_text = cv_file.read().decode('utf-8', errors='ignore')
+                return file.read().decode('utf-8', errors='ignore')
         except Exception as e:
             logger.error(f"Ошибка при чтении файла {filename}: {e}")
             raise ValueError(f"Could not process file: {filename}")
 
-        try:
-            with open("backend/resources/expectations-QA_AQA.csv", "r", encoding="utf-8") as f:
-                expectations_text = f.read()
+    async def analyze_preparation(
+            self,
+            cv_file: io.BytesIO,
+            cv_filename: str,
+            feedback_file: io.BytesIO,
+            feedback_filename: str,
+            requirements_link: str
+    ) -> PreparationAnalysis:
+        logger.info("Начало процесса подготовки к интервью (Пайплайн 1)...")
 
-            with open("backend/resources/values-mission-portrait.csv", "r", encoding="utf-8") as f:
-                values_text = f.read()
-        except FileNotFoundError as e:
-            logger.error(f"Не найден файл с ресурсами: {e}")
-            raise ValueError(f"Не удалось загрузить файл с ожиданиями или ценностями компании.")
+        self._set_google_api_key()
+
+        cv_text = self._read_file_content(cv_file, cv_filename)
+        feedback_text = self._read_file_content(feedback_file, feedback_filename)
+
+        requirements_file_id = self._get_google_drive_file_id(requirements_link)
+        requirements_text = await self._download_sheet_from_drive(requirements_file_id)
 
         session_service = InMemorySessionService()
         session_id = f"prep_session_{os.urandom(8).hex()}"
@@ -159,38 +171,21 @@ class AnalysisService:
 
         logger.info("🚀 Запуск agent_1_data_parser...")
         runner_1 = Runner(agent=agent_1_data_parser, app_name=settings.app_name, session_service=session_service)
-        message_for_agent_1 = types.Content(role="user", parts=[types.Part(text=cv_text), types.Part(
-            text=f"### Требования к вакансии\n{profile}")])
+        message_for_agent_1 = types.Content(
+            role="user",
+            parts=[
+                types.Part(text=f"cv_text: {cv_text}"),
+                types.Part(text=f"requirements_text: {requirements_text}"),
+                types.Part(text=f"feedback_text: {feedback_text}")
+            ]
+        )
         agent_1_output = ""
         async for event in runner_1.run_async(session_id=session_id, user_id=user_id, new_message=message_for_agent_1):
             if event.content and event.content.parts:
                 agent_1_output += "".join(part.text for part in event.content.parts if part.text)
 
-        new_instruction_for_agent_2 = f"""
-        {agent_2_grader.instruction}
-
-        ### ДОПОЛНИТЕЛЬНЫЙ КОНТЕКСТ ДЛЯ АНАЛИЗА ###
-
-        Вот информация об ожиданиях от кандидатов разных грейдов (из файла 'expectations-QA_AQA.csv'):
-        ---
-        {expectations_text}
-        ---
-
-        А вот информация о ценностях компании (из файла 'values-mission-portrait.csv'):
-        ---
-        {values_text}
-        ---
-        """
-
-        temp_agent_2_grader = Agent(
-            name=agent_2_grader.name,
-            model=agent_2_grader.model,
-            description=agent_2_grader.description,
-            instruction=new_instruction_for_agent_2
-        )
-
         logger.info("🚀 Запуск agent_2_grader...")
-        runner_2 = Runner(agent=temp_agent_2_grader, app_name=settings.app_name, session_service=session_service)
+        runner_2 = Runner(agent=agent_2_grader, app_name=settings.app_name, session_service=session_service)
         message_for_agent_2 = types.Content(role="user", parts=[types.Part(text=agent_1_output)])
         agent_2_output = ""
         async for event in runner_2.run_async(session_id=session_id, user_id=user_id, new_message=message_for_agent_2):
@@ -215,13 +210,35 @@ class AnalysisService:
                 **data
             }
             return PreparationAnalysis(**final_response_data)
-
         except json.JSONDecodeError as e:
             logger.error(f"Ошибка декодирования JSON от Агента 3: {e}\nПолученный текст: {final_output}")
             raise ValueError("AI-сервис вернул некорректный формат данных.")
         except Exception as e:
             logger.error(f"Ошибка валидации Pydantic или другая ошибка: {e}")
             raise ValueError(f"Ошибка при формировании итогового ответа: {e}")
+
+    async def _transcribe_audio_assemblyai(self, audio_data: io.BytesIO) -> str:
+        logger.info("Начало транскрипции аудио через AssemblyAI с автоопределением языка...")
+
+        config = aai.TranscriptionConfig(language_detection=True)
+        transcriber = aai.Transcriber(config=config)
+
+        def sync_transcribe_task():
+            logger.info("Запуск синхронной задачи транскрипции в отдельном потоке...")
+            return transcriber.transcribe(audio_data)
+
+        transcript = await asyncio.to_thread(sync_transcribe_task)
+
+        if transcript.status == aai.TranscriptStatus.error:
+            logger.error(f"Ошибка транскрипции AssemblyAI: {transcript.error}")
+            raise ValueError(f"Transcription failed: {transcript.error}")
+
+        logger.success("Транскрипция AssemblyAI успешно завершена.")
+
+        if not transcript.text:
+            logger.warning("Транскрипция вернула пустой текст.")
+
+        return transcript.text or ""
 
     async def analyze_results(self, video_link: str, matrix_content: bytes) -> ResultsAnalysis:
         logger.info("🚀 Запуск Пайплайна 2: Анализ результатов интервью...")

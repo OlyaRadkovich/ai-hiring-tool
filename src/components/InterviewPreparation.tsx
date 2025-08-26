@@ -39,7 +39,7 @@ interface AnalysisResponse {
 const InterviewPreparation: React.FC = () => {
   const [cvFile, setCvFile] = useState<File | null>(null);
   const [feedbackFile, setFeedbackFile] = useState<File | null>(null);
-  const [requirementsLink, setRequirementsLink] = useState('https://docs.google.com/spreadsheets/d/your-sheet-id');
+  const [requirementsLink, setRequirementsLink] = useState('https://docs.google.com/spreadsheets/d/1rtLBPqaJGkcZzUWDX01P5VI01bBGQ1B8H5g_S8PhXL0/edit?usp=sharing');
   const [isLoading, setIsLoading] = useState(false);
   const [analysisResponse, setAnalysisResponse] = useState<AnalysisResponse | null>(null);
 
@@ -56,10 +56,21 @@ const InterviewPreparation: React.FC = () => {
   };
 
   const handleSubmit = async () => {
-    if (!cvFile || !feedbackFile || !requirementsLink) {
+    const defaultLink = 'https://docs.google.com/spreadsheets/d/1rtLBPqaJGkcZzUWDX01P5VI01bBGQ1B8H5g_S8PhXL0/edit?usp=sharing';
+
+    if (requirementsLink === defaultLink || requirementsLink.trim() === '') {
       toast({
         title: "Ошибка",
-        description: "Пожалуйста, загрузите резюме, фидбек и укажите требования к кандидату.",
+        description: "Пожалуйста, укажите корректную ссылку на требования к кандидату.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!cvFile || !feedbackFile) {
+      toast({
+        title: "Ошибка",
+        description: "Пожалуйста, загрузите резюме и фидбэк от рекрутера.",
         variant: "destructive",
       });
       return;
@@ -70,9 +81,7 @@ const InterviewPreparation: React.FC = () => {
 
     const formData = new FormData();
     formData.append('cv_file', cvFile);
-    if (feedbackFile) {
-      formData.append('feedback_file', feedbackFile);
-    }
+    formData.append('feedback_file', feedbackFile);
     formData.append('requirements_link', requirementsLink);
 
     try {
@@ -81,12 +90,18 @@ const InterviewPreparation: React.FC = () => {
         body: formData,
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
-        throw new Error(data.detail || 'Произошла неизвестная ошибка');
+        // Сначала пытаемся прочитать ошибку как JSON
+        try {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || `Ошибка сервера: ${response.status}`);
+        } catch {
+            // Если тело ответа не JSON, показываем общую ошибку
+            throw new Error(`Ошибка сервера: ${response.status}`);
+        }
       }
 
+      const data = await response.json();
       setAnalysisResponse(data);
       toast({
         title: "Успех",
@@ -194,7 +209,7 @@ const InterviewPreparation: React.FC = () => {
 
     addTextBlock("Общий вывод", report.conclusion.summary);
     addTextBlock("Рекомендации по развитию", report.conclusion.recommendations);
-    addTextBlock("Темы для технического интервью", report.conclusion.interview_topics.map(topic => `- ${topic}`));
+    addTextBlock("Темы для технического интервью", report.conclusion.interview_topics);
     addTextBlock("Оценка соответствия ценностям", report.conclusion.values_assessment);
 
     doc.save("Отчет_по_кандидату.pdf");
@@ -212,7 +227,7 @@ const InterviewPreparation: React.FC = () => {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid w-full max-w-sm items-center gap-1.5">
-            <Label htmlFor="cv-file">Резюме</Label>
+            <Label htmlFor="cv-file">Резюме (.txt, .pdf, .docx)</Label>
             <Input id="cv-file" type="file" onChange={handleCvFileChange} accept=".txt,.pdf,.docx" />
           </div>
           <div className="grid w-full max-w-sm items-center gap-1.5">
@@ -225,7 +240,7 @@ const InterviewPreparation: React.FC = () => {
               id="requirements"
               value={requirementsLink}
               onChange={(e) => setRequirementsLink(e.target.value)}
-              placeholder="https://docs.google.com/spreadsheets/d/1rtLBPqaJGkcZzUWDX01P5VI01bBGQ1B8H5g_S8PhXL0/edit?usp=drive_link"
+              placeholder="Вставьте ссылку на Google Таблицу..."
             />
           </div>
         </CardContent>
