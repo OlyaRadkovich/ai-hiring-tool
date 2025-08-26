@@ -56,10 +56,10 @@ const InterviewPreparation: React.FC = () => {
   };
 
   const handleSubmit = async () => {
-    if (!cvFile || !requirementsLink) {
+    if (!cvFile || !feedbackFile || !requirementsLink) {
       toast({
         title: "Ошибка",
-        description: "Пожалуйста, загрузите резюме и укажите требования к кандидату.",
+        description: "Пожалуйста, загрузите резюме, фидбек и укажите требования к кандидату.",
         variant: "destructive",
       });
       return;
@@ -216,7 +216,7 @@ const InterviewPreparation: React.FC = () => {
             <Input id="cv-file" type="file" onChange={handleCvFileChange} accept=".txt,.pdf,.docx" />
           </div>
           <div className="grid w-full max-w-sm items-center gap-1.5">
-            <Label htmlFor="feedback-file">Фидбек от рекрутера (опционально)</Label>
+            <Label htmlFor="feedback-file">Фидбек от рекрутера</Label>
             <Input id="feedback-file" type="file" onChange={handleFeedbackFileChange} accept=".txt,.pdf,.docx" />
           </div>
           <div className="space-y-1.5">
