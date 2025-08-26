@@ -1,9 +1,6 @@
-// Файл: src/components/InterviewPreparation.tsx
-
 import React, { useState } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from './ui/card';
-import { Textarea } from './ui/textarea';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Table, TableBody, TableCell, TableHeader, TableHead, TableRow } from './ui/table';
@@ -41,21 +38,28 @@ interface AnalysisResponse {
 
 const InterviewPreparation: React.FC = () => {
   const [cvFile, setCvFile] = useState<File | null>(null);
-  const [profile, setProfile] = useState('');
+  const [feedbackFile, setFeedbackFile] = useState<File | null>(null);
+  const [requirementsLink, setRequirementsLink] = useState('https://docs.google.com/spreadsheets/d/your-sheet-id');
   const [isLoading, setIsLoading] = useState(false);
   const [analysisResponse, setAnalysisResponse] = useState<AnalysisResponse | null>(null);
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCvFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) {
       setCvFile(event.target.files[0]);
     }
   };
 
+  const handleFeedbackFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files) {
+      setFeedbackFile(event.target.files[0]);
+    }
+  };
+
   const handleSubmit = async () => {
-    if (!cvFile || !profile) {
+    if (!cvFile || !requirementsLink) {
       toast({
         title: "Ошибка",
-        description: "Пожалуйста, загрузите резюме и заполните профиль кандидата.",
+        description: "Пожалуйста, загрузите резюме и укажите требования к кандидату.",
         variant: "destructive",
       });
       return;
@@ -66,7 +70,10 @@ const InterviewPreparation: React.FC = () => {
 
     const formData = new FormData();
     formData.append('cv_file', cvFile);
-    formData.append('profile', profile);
+    if (feedbackFile) {
+      formData.append('feedback_file', feedbackFile);
+    }
+    formData.append('requirements_link', requirementsLink);
 
     try {
       const response = await fetch('http://localhost:8000/api/prep/', {
@@ -193,28 +200,32 @@ const InterviewPreparation: React.FC = () => {
     doc.save("Отчет_по_кандидату.pdf");
   };
 
-
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-3xl font-bold mb-4">Подготовка к интервью</h1>
       <Card>
         <CardHeader>
           <CardTitle>Анализ кандидата</CardTitle>
-          <CardDescription>Загрузите резюме и вставьте требования к вакансии для генерации плана интервью.</CardDescription>
+          <CardDescription>
+            Загрузите резюме и фидбек от рекрутера для генерации предварительной оценки кандидата. При необходимости измените ссылку на требования к кандидату.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid w-full max-w-sm items-center gap-1.5">
             <Label htmlFor="cv-file">Резюме (.txt, .pdf, .docx)</Label>
-            <Input id="cv-file" type="file" onChange={handleFileChange} accept=".txt,.pdf,.docx" />
+            <Input id="cv-file" type="file" onChange={handleCvFileChange} accept=".txt,.pdf,.docx" />
+          </div>
+          <div className="grid w-full max-w-sm items-center gap-1.5">
+            <Label htmlFor="feedback-file">Фидбек от рекрутера (опционально)</Label>
+            <Input id="feedback-file" type="file" onChange={handleFeedbackFileChange} accept=".txt,.pdf,.docx" />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="profile">Требования к вакансии и фидбэк рекрутера</Label>
-            <Textarea
-              id="profile"
-              value={profile}
-              onChange={(e) => setProfile(e.target.value)}
-              placeholder="Вставьте сюда текст..."
-              rows={10}
+            <Label htmlFor="requirements">Требования к кандидату</Label>
+            <Input
+              id="requirements"
+              value={requirementsLink}
+              onChange={(e) => setRequirementsLink(e.target.value)}
+              placeholder="https://docs.google.com/spreadsheets/d/your-sheet-id"
             />
           </div>
         </CardContent>
@@ -268,9 +279,9 @@ const InterviewPreparation: React.FC = () => {
 
             <h3 className="font-bold text-lg mt-4 mb-2">Темы для технического интервью</h3>
             <ul className="list-disc list-inside text-sm space-y-1">
-                {analysisResponse.report.conclusion.interview_topics.map((topic, index) => (
-                    <li key={index}>{topic}</li>
-                ))}
+              {analysisResponse.report.conclusion.interview_topics.map((topic, index) => (
+                <li key={index}>{topic}</li>
+              ))}
             </ul>
 
             <h3 className="font-bold text-lg mt-4 mb-2">Соответствие ценностям компании</h3>
