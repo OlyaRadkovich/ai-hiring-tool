@@ -205,14 +205,14 @@ const InterviewPreparation: React.FC = () => {
       <h1 className="text-3xl font-bold mb-4">Подготовка к интервью</h1>
       <Card>
         <CardHeader>
-          <CardTitle>Анализ кандидата</CardTitle>
+          <CardTitle>Оценка кандидата</CardTitle>
           <CardDescription>
-            Загрузите резюме и фидбек от рекрутера для генерации предварительной оценки кандидата. При необходимости измените ссылку на требования к кандидату.
+            Загрузите резюме и фидбек от рекрутера (в форматах .txt, .pdf или .docx) для генерации предварительной оценки кандидата. При необходимости измените ссылку на требования к кандидату.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid w-full max-w-sm items-center gap-1.5">
-            <Label htmlFor="cv-file">Резюме (.txt, .pdf, .docx)</Label>
+            <Label htmlFor="cv-file">Резюме</Label>
             <Input id="cv-file" type="file" onChange={handleCvFileChange} accept=".txt,.pdf,.docx" />
           </div>
           <div className="grid w-full max-w-sm items-center gap-1.5">
@@ -225,7 +225,7 @@ const InterviewPreparation: React.FC = () => {
               id="requirements"
               value={requirementsLink}
               onChange={(e) => setRequirementsLink(e.target.value)}
-              placeholder="https://docs.google.com/spreadsheets/d/your-sheet-id"
+              placeholder="https://docs.google.com/spreadsheets/d/1rtLBPqaJGkcZzUWDX01P5VI01bBGQ1B8H5g_S8PhXL0/edit?usp=drive_link"
             />
           </div>
         </CardContent>
