@@ -154,7 +154,7 @@ class AnalysisService:
             feedback_filename: str,
             requirements_link: str
     ) -> PreparationAnalysis:
-        logger.info("Начало процесса подготовки к интервью (Пайплайн 1)...")
+        logger.info("Начало процесса оценки кандидата (Пайплайн 1)...")
 
         self._set_google_api_key()
 

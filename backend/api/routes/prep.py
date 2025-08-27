@@ -38,7 +38,7 @@ async def analyze_preparation_endpoint(
         )
 
     try:
-        logger.info("Получен новый запрос на анализ для подготовки к интервью.")
+        logger.info("Получен новый запрос на оценку кандидата.")
 
         cv_content_bytes = await cv_file.read()
         cv_file_like_object = io.BytesIO(cv_content_bytes)

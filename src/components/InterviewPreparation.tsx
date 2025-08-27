@@ -14,14 +14,12 @@ interface MatchingItem {
   match: string;
   comment: string;
 }
-
 interface Conclusion {
   summary: string;
   recommendations: string;
   interview_topics: string[];
   values_assessment: string;
 }
-
 interface Report {
   first_name: string | null;
   last_name: string | null;
@@ -29,12 +27,43 @@ interface Report {
   candidate_profile: string;
   conclusion: Conclusion;
 }
-
 interface AnalysisResponse {
   message: string;
   success: boolean;
   report: Report;
 }
+
+const icons = {
+  full: {
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m9 12 2 2 4-4"/></svg>`,
+    color: '#22c55e', // green-500
+  },
+  partial: {
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" x2="12" y1="9" y2="13"></line><line x1="12" x2="12.01" y1="17" y2="17"></line></svg>`,
+    color: '#f59e0b', // amber-500
+  },
+  none: {
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" x2="9" y1="9" y2="15"></line><line x1="9" x2="15" y1="9" y2="15"></line></svg>`,
+    color: '#ef4444', // red-500
+  },
+};
+
+const StatusIcon = ({ status }: { status: string }) => {
+  const iconKey = status.toLowerCase() as keyof typeof icons;
+  const icon = icons[iconKey];
+
+  if (!icon) {
+    return <span>{status}</span>;
+  }
+
+  return (
+    <div
+      className="w-6 h-6 mx-auto"
+      dangerouslySetInnerHTML={{ __html: icon.svg.replace('currentColor', icon.color) }}
+    />
+  );
+};
+
 
 const InterviewPreparation: React.FC = () => {
   const [cvFile, setCvFile] = useState<File | null>(null);
@@ -44,35 +73,20 @@ const InterviewPreparation: React.FC = () => {
   const [analysisResponse, setAnalysisResponse] = useState<AnalysisResponse | null>(null);
 
   const handleCvFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files) {
-      setCvFile(event.target.files[0]);
-    }
+    if (event.target.files) setCvFile(event.target.files[0]);
   };
 
   const handleFeedbackFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files) {
-      setFeedbackFile(event.target.files[0]);
-    }
+    if (event.target.files) setFeedbackFile(event.target.files[0]);
   };
 
   const handleSubmit = async () => {
-    const defaultLink = 'https://docs.google.com/spreadsheets/d/1rtLBPqaJGkcZzUWDX01P5VI01bBGQ1B8H5g_S8PhXL0/edit?usp=sharing';
-
-    if (requirementsLink === defaultLink || requirementsLink.trim() === '') {
-      toast({
-        title: "Ошибка",
-        description: "Пожалуйста, укажите корректную ссылку на требования к кандидату.",
-        variant: "destructive",
-      });
+    if (requirementsLink.trim() === '') {
+      toast({ title: "Ошибка", description: "Пожалуйста, укажите ссылку на требования к кандидату.", variant: "destructive" });
       return;
     }
-
     if (!cvFile || !feedbackFile) {
-      toast({
-        title: "Ошибка",
-        description: "Пожалуйста, загрузите резюме и фидбэк от рекрутера.",
-        variant: "destructive",
-      });
+      toast({ title: "Ошибка", description: "Пожалуйста, загрузите резюме и фидбэк от рекрутера.", variant: "destructive" });
       return;
     }
 
@@ -80,39 +94,21 @@ const InterviewPreparation: React.FC = () => {
     setAnalysisResponse(null);
 
     const formData = new FormData();
-    formData.append('cv_file', cvFile);
-    formData.append('feedback_file', feedbackFile);
+    if(cvFile) formData.append('cv_file', cvFile);
+    if(feedbackFile) formData.append('feedback_file', feedbackFile);
     formData.append('requirements_link', requirementsLink);
 
     try {
-      const response = await fetch('http://localhost:8000/api/prep/', {
-        method: 'POST',
-        body: formData,
-      });
-
+      const response = await fetch('http://localhost:8000/api/prep/', { method: 'POST', body: formData });
       if (!response.ok) {
-        // Сначала пытаемся прочитать ошибку как JSON
-        try {
-            const errorData = await response.json();
-            throw new Error(errorData.detail || `Ошибка сервера: ${response.status}`);
-        } catch {
-            // Если тело ответа не JSON, показываем общую ошибку
-            throw new Error(`Ошибка сервера: ${response.status}`);
-        }
+        const errorData = await response.json().catch(() => ({ detail: `Ошибка сервера: ${response.status}` }));
+        throw new Error(errorData.detail);
       }
-
       const data = await response.json();
       setAnalysisResponse(data);
-      toast({
-        title: "Успех",
-        description: "Анализ успешно завершен.",
-      });
+      toast({ title: "Успех", description: "Анализ успешно завершен." });
     } catch (error: any) {
-      toast({
-        title: "Ошибка анализа",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast({ title: "Ошибка анализа", description: error.message, variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -136,6 +132,8 @@ const InterviewPreparation: React.FC = () => {
         reader.readAsDataURL(fontBlob);
       });
       const fontBase64 = fontData.split(',')[1];
+      doc.addFileToVFS('Roboto-Regular.ttf', fontBase64);
+      doc.addFont('Roboto-Regular.ttf', 'Roboto', 'normal');
 
       const fontBoldResponse = await fetch('/fonts/Roboto-Bold.ttf');
       const fontBoldBlob = await fontBoldResponse.blob();
@@ -146,26 +144,44 @@ const InterviewPreparation: React.FC = () => {
         reader.readAsDataURL(fontBoldBlob);
       });
       const fontBoldBase64 = fontBoldData.split(',')[1];
-
-      doc.addFileToVFS('Roboto-Regular.ttf', fontBase64);
-      doc.addFont('Roboto-Regular.ttf', 'Roboto', 'normal');
       doc.addFileToVFS('Roboto-Bold.ttf', fontBoldBase64);
       doc.addFont('Roboto-Bold.ttf', 'Roboto', 'bold');
     } catch (error) {
-        console.error("Не удалось загрузить шрифты, будет использован стандартный шрифт.", error);
+        console.error("Не удалось загрузить шрифты.", error);
     }
+
+    const svgToPng = (svg: string, size: number): Promise<string> => {
+      return new Promise((resolve) => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const img = new Image();
+
+        canvas.width = size;
+        canvas.height = size;
+
+        img.onload = () => {
+          ctx?.drawImage(img, 0, 0, size, size);
+          resolve(canvas.toDataURL('image/png'));
+        };
+        img.src = `data:image/svg+xml;base64,${btoa(svg)}`;
+      });
+    };
+
+    const imagePromises = report.matching_table.map(item => {
+      const iconKey = item.match.toLowerCase() as keyof typeof icons;
+      return icons[iconKey] ? svgToPng(icons[iconKey].svg, 64) : Promise.resolve(null);
+    });
+    const pngImages = await Promise.all(imagePromises);
 
     doc.setFont('Roboto', 'bold');
     doc.setFontSize(18);
     doc.text("Предварительная оценка кандидата", 14, 20);
-
+    doc.setFont('Roboto', 'normal');
     doc.setFontSize(14);
     doc.text(`${report.first_name || ''} ${report.last_name || ''}`, 14, 30);
-
     const profileY = 30 + 10;
     doc.setFontSize(12);
     doc.text(`Предполагаемый профиль: ${report.candidate_profile}`, 14, profileY);
-
     const tableTitleY = profileY + 15;
     doc.setFont('Roboto', 'bold');
     doc.setFontSize(14);
@@ -174,16 +190,24 @@ const InterviewPreparation: React.FC = () => {
     autoTable(doc, {
       startY: tableTitleY + 5,
       head: [['Критерий', 'Соответствие', 'Пояснение']],
-      body: report.matching_table.map(item => {
-        const capitalizedCriterion = item.criterion.charAt(0).toUpperCase() + item.criterion.slice(1);
-        return [capitalizedCriterion, item.match, item.comment];
-      }),
+      body: report.matching_table.map(item => [item.criterion, '', item.comment]),
       theme: 'grid',
-      styles: { font: 'Roboto', fontSize: 10 },
-      headStyles: { fillColor: [41, 128, 185], fontStyle: 'bold' },
+      styles: { font: 'Roboto', fontSize: 10, fontStyle: 'normal' },
+      headStyles: { fillColor: [41, 128, 185], font: 'Roboto', fontStyle: 'bold' },
+      didDrawCell: (data) => {
+        if (data.section === 'body' && data.column.index === 1) {
+          const pngImage = pngImages[data.row.index];
+          if (pngImage) {
+            const imgSize = 5;
+            const x = data.cell.x + (data.cell.width - imgSize) / 2;
+            const y = data.cell.y + (data.cell.height - imgSize) / 2;
+            doc.addImage(pngImage, 'PNG', x, y, imgSize, imgSize);
+          }
+        }
+      },
       columnStyles: {
         0: { cellWidth: 55 },
-        1: { cellWidth: 35 },
+        1: { cellWidth: 35, halign: 'center' },
         2: { cellWidth: 'auto' }
       },
     });
@@ -192,8 +216,8 @@ const InterviewPreparation: React.FC = () => {
 
     const addTextBlock = (title: string, content: string | string[]) => {
       if (lastY > 260) {
-          doc.addPage();
-          lastY = 20;
+        doc.addPage();
+        lastY = 20;
       }
       doc.setFont('Roboto', 'bold');
       doc.setFontSize(14);
@@ -212,7 +236,8 @@ const InterviewPreparation: React.FC = () => {
     addTextBlock("Темы для технического интервью", report.conclusion.interview_topics);
     addTextBlock("Оценка соответствия ценностям", report.conclusion.values_assessment);
 
-    doc.save("Отчет_по_кандидату.pdf");
+    const fileName = `Отчет по кандидату - ${report.first_name || ''} ${report.last_name || ''}.pdf`;
+    doc.save(fileName);
   };
 
   return (
@@ -270,7 +295,7 @@ const InterviewPreparation: React.FC = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-[40%]">Критерий</TableHead>
-                    <TableHead className="w-[15%]">Соответствие</TableHead>
+                    <TableHead className="w-[15%] text-center">Соответствие</TableHead>
                     <TableHead>Пояснение</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -278,7 +303,9 @@ const InterviewPreparation: React.FC = () => {
                   {analysisResponse.report.matching_table.map((item, index) => (
                     <TableRow key={index}>
                       <TableCell>{item.criterion}</TableCell>
-                      <TableCell>{item.match}</TableCell>
+                      <TableCell className="text-center">
+                        <StatusIcon status={item.match} />
+                      </TableCell>
                       <TableCell>{item.comment}</TableCell>
                     </TableRow>
                   ))}
