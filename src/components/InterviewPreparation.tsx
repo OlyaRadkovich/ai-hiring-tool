@@ -3,6 +3,7 @@ import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
+import { Textarea } from './ui/textarea';
 import { Table, TableBody, TableCell, TableHeader, TableHead, TableRow } from './ui/table';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -32,42 +33,31 @@ interface AnalysisResponse {
   success: boolean;
   report: Report;
 }
-
 const icons = {
   full: {
     svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m9 12 2 2 4-4"/></svg>`,
-    color: '#22c55e', // green-500
+    color: '#22c55e',
   },
   partial: {
     svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" x2="12" y1="9" y2="13"></line><line x1="12" x2="12.01" y1="17" y2="17"></line></svg>`,
-    color: '#f59e0b', // amber-500
+    color: '#f59e0b',
   },
   none: {
     svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" x2="9" y1="9" y2="15"></line><line x1="9" x2="15" y1="9" y2="15"></line></svg>`,
-    color: '#ef4444', // red-500
+    color: '#ef4444',
   },
 };
-
 const StatusIcon = ({ status }: { status: string }) => {
   const iconKey = status.toLowerCase() as keyof typeof icons;
   const icon = icons[iconKey];
-
-  if (!icon) {
-    return <span>{status}</span>;
-  }
-
-  return (
-    <div
-      className="w-6 h-6 mx-auto"
-      dangerouslySetInnerHTML={{ __html: icon.svg.replace('currentColor', icon.color) }}
-    />
-  );
+  if (!icon) return <span>{status}</span>;
+  return <div className="w-6 h-6 mx-auto" dangerouslySetInnerHTML={{ __html: icon.svg }} />;
 };
 
 
 const InterviewPreparation: React.FC = () => {
   const [cvFile, setCvFile] = useState<File | null>(null);
-  const [feedbackFile, setFeedbackFile] = useState<File | null>(null);
+  const [feedbackText, setFeedbackText] = useState('');
   const [requirementsLink, setRequirementsLink] = useState('https://docs.google.com/spreadsheets/d/1rtLBPqaJGkcZzUWDX01P5VI01bBGQ1B8H5g_S8PhXL0/edit?usp=sharing');
   const [isLoading, setIsLoading] = useState(false);
   const [analysisResponse, setAnalysisResponse] = useState<AnalysisResponse | null>(null);
@@ -76,26 +66,22 @@ const InterviewPreparation: React.FC = () => {
     if (event.target.files) setCvFile(event.target.files[0]);
   };
 
-  const handleFeedbackFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files) setFeedbackFile(event.target.files[0]);
-  };
-
   const handleSubmit = async () => {
+    setAnalysisResponse(null);
     if (requirementsLink.trim() === '') {
       toast({ title: "Ошибка", description: "Пожалуйста, укажите ссылку на требования к кандидату.", variant: "destructive" });
       return;
     }
-    if (!cvFile || !feedbackFile) {
-      toast({ title: "Ошибка", description: "Пожалуйста, загрузите резюме и фидбэк от рекрутера.", variant: "destructive" });
+    if (!cvFile || feedbackText.trim() === '') {
+      toast({ title: "Ошибка", description: "Пожалуйста, загрузите резюме и введите фидбэк от рекрутера.", variant: "destructive" });
       return;
     }
 
     setIsLoading(true);
-    setAnalysisResponse(null);
 
     const formData = new FormData();
     if(cvFile) formData.append('cv_file', cvFile);
-    if(feedbackFile) formData.append('feedback_file', feedbackFile);
+    formData.append('feedback_text', feedbackText);
     formData.append('requirements_link', requirementsLink);
 
     try {
@@ -240,6 +226,7 @@ const InterviewPreparation: React.FC = () => {
     doc.save(fileName);
   };
 
+
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-3xl font-bold mb-4">Подготовка к интервью</h1>
@@ -247,7 +234,7 @@ const InterviewPreparation: React.FC = () => {
         <CardHeader>
           <CardTitle>Оценка кандидата</CardTitle>
           <CardDescription>
-            Загрузите резюме и фидбек от рекрутера (в форматах .txt, .pdf или .docx) для генерации предварительной оценки кандидата. При необходимости измените ссылку на требования к кандидату.
+            Загрузите резюме, вставьте фидбэк от рекрутера и при необходимости измените ссылку на требования для генерации отчета.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -255,9 +242,14 @@ const InterviewPreparation: React.FC = () => {
             <Label htmlFor="cv-file">Резюме (.txt, .pdf, .docx)</Label>
             <Input id="cv-file" type="file" onChange={handleCvFileChange} accept=".txt,.pdf,.docx" />
           </div>
-          <div className="grid w-full max-w-sm items-center gap-1.5">
-            <Label htmlFor="feedback-file">Фидбек от рекрутера</Label>
-            <Input id="feedback-file" type="file" onChange={handleFeedbackFileChange} accept=".txt,.pdf,.docx" />
+          <div className="grid w-full gap-1.5">
+            <Label htmlFor="feedback-text">Фидбек от рекрутера</Label>
+            <Textarea
+              id="feedback-text"
+              placeholder="Скопируйте и вставьте сюда фидбэк от рекрутера..."
+              value={feedbackText}
+              onChange={(e) => setFeedbackText(e.target.value)}
+            />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="requirements">Требования к кандидату</Label>
@@ -265,8 +257,11 @@ const InterviewPreparation: React.FC = () => {
               id="requirements"
               value={requirementsLink}
               onChange={(e) => setRequirementsLink(e.target.value)}
-              placeholder="Вставьте ссылку на Google Таблицу..."
+              placeholder="Вставьте ссылку на Google-таблицу..."
             />
+          <CardDescription>
+            ВАЖНО! Если меняете ссылку, убедитесь, что документ является Google-таблицей и находится в папке, к которой у приложения открыт доступ с правами Contributor/Editor.
+          </CardDescription>
           </div>
         </CardContent>
         <CardFooter>
@@ -312,7 +307,6 @@ const InterviewPreparation: React.FC = () => {
                 </TableBody>
               </Table>
             </div>
-
             <h3 className="font-bold text-lg mt-4 mb-2">Общий вывод</h3>
             <p className="text-sm">{analysisResponse.report.conclusion.summary}</p>
 
