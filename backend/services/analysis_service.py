@@ -150,8 +150,7 @@ class AnalysisService:
             self,
             cv_file: io.BytesIO,
             cv_filename: str,
-            feedback_file: io.BytesIO,
-            feedback_filename: str,
+            feedback_text: str,
             requirements_link: str
     ) -> PreparationAnalysis:
         logger.info("Начало процесса оценки кандидата (Пайплайн 1)...")
@@ -159,7 +158,6 @@ class AnalysisService:
         self._set_google_api_key()
 
         cv_text = self._read_file_content(cv_file, cv_filename)
-        feedback_text = self._read_file_content(feedback_file, feedback_filename)
 
         requirements_file_id = self._get_google_drive_file_id(requirements_link)
         requirements_text = await self._download_sheet_from_drive(requirements_file_id)

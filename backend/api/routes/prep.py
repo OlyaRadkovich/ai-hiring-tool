@@ -21,7 +21,7 @@ router = APIRouter()
 )
 async def analyze_preparation_endpoint(
         cv_file: UploadFile = File(..., description="Резюме кандидата (.txt, .pdf, .docx)."),
-        feedback_file: UploadFile = File(..., description="Фидбэк от рекрутера (.txt, .pdf, .docx)."),
+        feedback_text: str = Form(..., description="Фидбэк от рекрутера в виде текста."),
         requirements_link: str = Form(..., description="Ссылка на Google Таблицу с требованиями."),
         analysis_service: AnalysisService = Depends(get_analysis_service)
 ):
@@ -31,11 +31,6 @@ async def analyze_preparation_endpoint(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Недопустимый тип файла для резюме: {cv_file.filename}. Разрешены: .txt, .pdf, .docx."
         )
-    if not feedback_file.filename or not feedback_file.filename.lower().endswith(allowed_extensions):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Недопустимый тип файла для фидбэка: {feedback_file.filename}. Разрешены: .txt, .pdf, .docx."
-        )
 
     try:
         logger.info("Получен новый запрос на оценку кандидата.")
@@ -43,14 +38,10 @@ async def analyze_preparation_endpoint(
         cv_content_bytes = await cv_file.read()
         cv_file_like_object = io.BytesIO(cv_content_bytes)
 
-        feedback_content_bytes = await feedback_file.read()
-        feedback_file_like_object = io.BytesIO(feedback_content_bytes)
-
         analysis_result = await analysis_service.analyze_preparation(
             cv_file=cv_file_like_object,
             cv_filename=cv_file.filename,
-            feedback_file=feedback_file_like_object,
-            feedback_filename=feedback_file.filename,
+            feedback_text=feedback_text,
             requirements_link=requirements_link
         )
 
