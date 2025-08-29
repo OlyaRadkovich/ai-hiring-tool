@@ -10,42 +10,70 @@ import {
   Upload,
   Brain,
   Download,
-  Play,
   FileText,
   CheckCircle,
   AlertCircle,
   TrendingUp,
   Users,
-  Target
+  Target,
+  FileJson,
+  BookUser,
+  Building,
+  UserCheck,
+  ClipboardList
 } from "lucide-react";
 
 export default function InterviewResults() {
+
+  const [cvFile, setCvFile] = useState<File | null>(null);
   const [videoLink, setVideoLink] = useState("");
-  const [competencyMatrix, setCompetencyMatrix] = useState<File | null>(null);
+  const [competencyMatrixLink, setCompetencyMatrixLink] = useState("https://docs.google.com/spreadsheets/d/1TkBmT4XQ-nQrdJ2ALGLwXb99wlcFIPwhgah3ZTafOwE/edit?usp=drive_link");
+  const [departmentValuesLink, setDepartmentValuesLink] = useState("https://docs.google.com/spreadsheets/d/1MEQq1yqlWINXuA3-zc9dVhUeuBysSmf7D_w9goPNhLg/edit?usp=drive_link");
+  const [employeePortraitLink, setEmployeePortraitLink] = useState("https://docs.google.com/spreadsheets/d/1dtP5BHysvSffMt8OrXaVo5a1jcuO4o-yq3h_ITAImIk/edit?usp=drive_link");
+  const [jobRequirementsLink, setJobRequirementsLink] = useState("https://docs.google.com/spreadsheets/d/1w-DpZkCCBt2C0XBhXrdt9rgZ9WeNI6V15Iv55E5QBcw/edit?usp=drive_link");
+
   const [isProcessing, setIsProcessing] = useState(false);
   const [analysisResults, setAnalysisResults] = useState<any>(null);
   const [isExporting, setIsExporting] = useState(false);
 
-  const handleMatrixUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (setter: React.Dispatch<React.SetStateAction<File | null>>) => (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      setCompetencyMatrix(file);
+      setter(file);
     }
   };
 
   const handleAnalyzeInterview = async () => {
-    if (!competencyMatrix) return;
+    if (!cvFile || !videoLink) {
+        alert("Пожалуйста, загрузите CV и укажите ссылку на видеозапись.");
+        return;
+    }
+
     setIsProcessing(true);
     try {
       const form = new FormData();
+
+      form.append("cv_file", cvFile);
+
       form.append("video_link", videoLink);
-      form.append("matrix_file", competencyMatrix);
+      form.append("competency_matrix_link", competencyMatrixLink);
+      form.append("department_values_link", departmentValuesLink);
+      form.append("employee_portrait_link", employeePortraitLink);
+      form.append("job_requirements_link", jobRequirementsLink);
+
+      // !! ВАЖНО: URL эндпоинта и названия полей в FormData
+      //    должны будут соответствовать бэкенду, когда мы его обновим.
       const res = await fetch("/api/results/", { method: "POST", body: form });
-      if (!res.ok) throw new Error("Analyze failed");
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.detail || "Analyze failed");
+      }
       const data = await res.json();
       setAnalysisResults(data);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      alert(`Произошла ошибка: ${err.message}`);
     } finally {
       setIsProcessing(false);
     }
@@ -57,9 +85,7 @@ export default function InterviewResults() {
     try {
       const response = await fetch("/api/results/export", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(analysisResults),
       });
 
@@ -91,213 +117,78 @@ export default function InterviewResults() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Input Section */}
+    <div className="space-y-6 p-4 md:p-6">
+      <h2 className="text-3xl font-bold">Анализ Результатов Интервью</h2>
       <div className="grid md:grid-cols-2 gap-6">
         <Card className="shadow-card">
           <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Video className="w-5 h-5 text-primary" />
-              <span>Interview Video</span>
-            </CardTitle>
-            <CardDescription>
-              Provide a Google Drive link to the recorded interview
-            </CardDescription>
+            <CardTitle className="flex items-center space-x-2"><BookUser className="w-5 h-5 text-primary" /><span>CV Кандидата</span></CardTitle>
+            <CardDescription>Загрузите резюме в формате .txt, .pdf или .docx</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="video-link">Google Drive Video Link</Label>
-              <Input
-                id="video-link"
-                type="url"
-                placeholder="https://drive.google.com/file/d/..."
-                value={videoLink}
-                onChange={(e) => setVideoLink(e.target.value)}
-              />
+          <CardContent>
+            <div className="border-2 border-dashed border-border rounded-lg p-6 text-center hover:border-primary/50 transition-colors">
+              <input type="file" id="cv-upload" accept=".pdf,.docx, .txt" onChange={handleFileChange(setCvFile)} className="hidden" />
+              <label htmlFor="cv-upload" className="cursor-pointer">
+                <Upload className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+                <p className="text-sm text-muted-foreground mb-2">{cvFile ? cvFile.name : "Нажмите для загрузки CV"}</p>
+              </label>
             </div>
-            {videoLink && (
-              <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                <Play className="w-4 h-4" />
-                <span>Video link ready for processing</span>
-              </div>
-            )}
+            {cvFile && <Badge variant="secondary" className="mt-3">✓ {cvFile.name} загружен</Badge>}
           </CardContent>
         </Card>
 
         <Card className="shadow-card">
           <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Upload className="w-5 h-5 text-accent" />
-              <span>Competency Matrix</span>
-            </CardTitle>
-            <CardDescription>
-              Upload your evaluation criteria and scoring framework
-            </CardDescription>
+            <CardTitle className="flex items-center space-x-2"><Video className="w-5 h-5 text-primary" /><span>Видеозапись собеседования</span></CardTitle>
+            <CardDescription>Вставьте ссылку на видео в Google Drive</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="border-2 border-dashed border-border rounded-lg p-6 text-center hover:border-primary/50 transition-colors">
-              <input
-                type="file"
-                id="matrix-upload"
-                accept=".pdf,.docx"
-                onChange={handleMatrixUpload}
-                className="hidden"
-              />
-              <label htmlFor="matrix-upload" className="cursor-pointer">
-                <FileText className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-                <p className="text-sm text-muted-foreground mb-2">
-                  {competencyMatrix ? competencyMatrix.name : "Click to upload matrix"}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  PDF or DOCX format
-                </p>
-              </label>
+          <CardContent className="space-y-4">
+            <Label htmlFor="video-link">Ссылка на видео</Label>
+            <Input id="video-link" type="url" placeholder="https://drive.google.com/file/d/..." value={videoLink} onChange={(e) => setVideoLink(e.target.value)} />
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-card md:col-span-2">
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2"><FileJson className="w-5 h-5 text-accent" /><span>Дополнительные материалы (Google Drive)</span></CardTitle>
+            <CardDescription>Ссылки на Google-таблицы с критериями.</CardDescription>
+            <CardDescription>Вы можете использовать стандартные или указать свои.</CardDescription>
+            <CardDescription>ВАЖНО! При изменении ссылки убедитесь, что документ является Google-таблицей и находится в папке, куда у приложения есть доступ уровня Contributor/Editor.</CardDescription>
+            <CardDescription>Чтобы открыть доступ, добавьте почту приложения в share. Почта: ai-hiring-tool-service@ai-hiring-tool.iam.gserviceaccount.com</CardDescription>
+          </CardHeader>
+          <CardContent className="grid md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+                <Label htmlFor="competency-matrix-link" className="flex items-center space-x-2"><FileText className="w-4 h-4" /><span>Матрица компетенций QA/AQA</span></Label>
+                <Input id="competency-matrix-link" type="url" value={competencyMatrixLink} onChange={(e) => setCompetencyMatrixLink(e.target.value)} />
             </div>
-            {competencyMatrix && (
-              <Badge variant="secondary" className="mt-3">
-                ✓ {competencyMatrix.name} uploaded
-              </Badge>
-            )}
+            <div className="space-y-2">
+                <Label htmlFor="department-values-link" className="flex items-center space-x-2"><Building className="w-4 h-4" /><span>Ценности департамента</span></Label>
+                <Input id="department-values-link" type="url" value={departmentValuesLink} onChange={(e) => setDepartmentValuesLink(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+                <Label htmlFor="employee-portrait-link" className="flex items-center space-x-2"><UserCheck className="w-4 h-4" /><span>Портрет сотрудника</span></Label>
+                <Input id="employee-portrait-link" type="url" value={employeePortraitLink} onChange={(e) => setEmployeePortraitLink(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+                <Label htmlFor="job-requirements-link" className="flex items-center space-x-2"><ClipboardList className="w-4 h-4" /><span>Требования к вакансии</span></Label>
+                <Input id="job-requirements-link" type="url" value={jobRequirementsLink} onChange={(e) => setJobRequirementsLink(e.target.value)} />
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Process Button */}
-      <div className="text-center">
-        <Button
-          onClick={handleAnalyzeInterview}
-          disabled={!videoLink || !competencyMatrix || isProcessing}
-          className="bg-gradient-primary hover:shadow-glow transition-all duration-300 px-8"
-          size="lg"
-        >
+      <div className="text-center pt-4">
+        <Button onClick={handleAnalyzeInterview} disabled={!cvFile || !videoLink || isProcessing} className="bg-gradient-primary hover:shadow-glow transition-all duration-300 px-8 py-6 text-lg" size="lg">
           {isProcessing ? (
-            <>
-              <Brain className="w-5 h-5 mr-2 animate-spin" />
-              Processing Interview... (AI transcription & analysis)
-            </>
+            <><Brain className="w-6 h-6 mr-3 animate-spin" /><span>Обработка...</span></>
           ) : (
-            <>
-              <Brain className="w-5 h-5 mr-2" />
-              Analyze Interview with AI
-            </>
+            <><Brain className="w-6 h-6 mr-3" /><span>Запустить AI-анализ</span></>
           )}
         </Button>
       </div>
 
-      {/* Analysis Results */}
       {analysisResults && (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h3 className="text-2xl font-bold">Interview Analysis Results</h3>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleExportDocx}
-              disabled={isExporting}
-            >
-              <Download className={`w-4 h-4 mr-2 ${isExporting ? 'animate-pulse' : ''}`} />
-              {isExporting ? "Экспорт..." : "Export DOCX Report"}
-            </Button>
-          </div>
-
-          <Card className="shadow-card border-l-4 border-l-green-500">
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <Target className="w-5 h-5 text-green-600" />
-                <span>Final Recommendation</span>
-                <Badge variant="secondary" className="bg-green-100 text-green-800">
-                  {analysisResults.recommendation}
-                </Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground leading-relaxed">
-                {analysisResults.reasoning}
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-card">
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <TrendingUp className="w-5 h-5 text-primary" />
-                <span>Competency Assessment</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid md:grid-cols-2 gap-6">
-                {Object.entries(analysisResults.scores).map(([category, score]: [string, any]) => (
-                  <div key={category} className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium capitalize">{category}</span>
-                      <span className={`font-bold ${getScoreColor(score)}`}>
-                        {score}%
-                      </span>
-                    </div>
-                    <Progress value={score} className="h-2" />
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          <div className="grid md:grid-cols-2 gap-6">
-            <Card className="shadow-card">
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2 text-green-600">
-                  <CheckCircle className="w-5 h-5" />
-                  <span>Key Strengths</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-3">
-                  {analysisResults.strengths.map((strength: string, index: number) => (
-                    <li key={index} className="flex items-start space-x-2">
-                      <div className="w-2 h-2 bg-green-500 rounded-full mt-2 flex-shrink-0" />
-                      <span className="text-sm">{strength}</span>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
-
-            <Card className="shadow-card">
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2 text-yellow-600">
-                  <AlertCircle className="w-5 h-5" />
-                  <span>Areas of Concern</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-3">
-                  {analysisResults.concerns.map((concern: string, index: number) => (
-                    <li key={index} className="flex items-start space-x-2">
-                      <div className="w-2 h-2 bg-yellow-500 rounded-full mt-2 flex-shrink-0" />
-                      <span className="text-sm">{concern}</span>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card className="shadow-card">
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <Users className="w-5 h-5 text-accent" />
-                <span>Topics Discussed</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-2">
-                {analysisResults.topicsDiscussed.map((topic: string, index: number) => (
-                  <Badge key={index} variant="outline" className="px-3 py-1">
-                    {topic}
-                  </Badge>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+        <div className="space-y-8 pt-6">
         </div>
       )}
     </div>
