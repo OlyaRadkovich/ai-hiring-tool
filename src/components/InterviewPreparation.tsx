@@ -259,13 +259,9 @@ const InterviewPreparation: React.FC = () => {
               onChange={(e) => setRequirementsLink(e.target.value)}
               placeholder="Вставьте ссылку на Google-таблицу..."
             />
-          <CardDescription>
-            ВАЖНО! Если меняете ссылку, убедитесь, что документ является Google-таблицей и находится в папке, к которой у приложения открыт доступ с правами Contributor/Editor.
-          </CardDescription>
           </div>
           <CardDescription>
-            ВАЖНО! При изменении ссылки убедитесь, что документ является Google-таблицей и находится в папке, куда у приложения есть доступ уровня Contributor/Editor.
-            Чтобы открыть доступ, добавьте почту приложения в share. Почта: ai-hiring-tool-service@ai-hiring-tool.iam.gserviceaccount.com
+            При изменении ссылки убедитесь, что документ является Google-таблицей и находится в папке, к которой у сервиса ai-hiring-tool-service@ai-hiring-tool.iam.gserviceaccount.com есть доступ уровня Contributor/Editor.
           </CardDescription>
         </CardContent>
         <CardFooter>

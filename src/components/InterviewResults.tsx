@@ -137,6 +137,7 @@ export default function InterviewResults() {
           <CardHeader>
             <CardTitle className="flex items-center space-x-2"><Video className="w-5 h-5 text-primary" /><span>Видеозапись собеседования</span></CardTitle>
             <CardDescription>Вставьте ссылку на видео в Google Drive</CardDescription>
+            <CardDescription>Видео должно находится в папке, к которой у сервиса ai-hiring-tool-service@ai-hiring-tool.iam.gserviceaccount.com есть доступ уровня Contributor/Editor</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <Label htmlFor="video-link">Ссылка на видео</Label>
@@ -148,6 +149,7 @@ export default function InterviewResults() {
           <CardHeader>
             <CardTitle className="flex items-center space-x-2"><FileJson className="w-5 h-5 text-accent" /><span>Дополнительные материалы (Google Drive)</span></CardTitle>
             <CardDescription>Ссылки на Google-таблицы с критериями.</CardDescription>
+            <CardDescription>При изменении ссылки убедитесь, что документ является Google-таблицей и находится в папке, к которой у сервиса ai-hiring-tool-service@ai-hiring-tool.iam.gserviceaccount.com есть доступ уровня Contributor/Editor.</CardDescription>
           </CardHeader>
           <CardContent className="grid md:grid-cols-2 gap-6">
             <div className="space-y-2">
