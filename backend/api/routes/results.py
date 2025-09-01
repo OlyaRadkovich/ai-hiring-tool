@@ -1,12 +1,10 @@
 import io
 from fastapi import APIRouter, UploadFile, File, Form, status, HTTPException, Depends
-from fastapi.responses import Response
 from loguru import logger
-from backend.api.models import ResultsAnalysis, ErrorResponse, FullReport
+from backend.api.models import ResultsAnalysis, ErrorResponse
 from backend.services.analysis_service import AnalysisService
 from backend.api.deps import get_analysis_service
 from googleapiclient.errors import HttpError
-from backend.utils import file_processing as fp
 
 router = APIRouter()
 
@@ -21,7 +19,7 @@ router = APIRouter()
         500: {"model": ErrorResponse},
     },
     summary="Анализ результатов интервью",
-    description="Принимает полный набор данных для генерации развернутого фидбэка по кандидату.."
+    description="Принимает полный набор данных для генерации развернутого фидбэка по кандидату."
 )
 async def analyze_results_endpoint(
         cv_file: UploadFile = File(..., description="Резюме кандидата (.pdf, .docx)."),
@@ -32,9 +30,6 @@ async def analyze_results_endpoint(
         job_requirements_link: str = Form(..., description="Ссылка на требования к вакансии."),
         analysis_service: AnalysisService = Depends(get_analysis_service)
 ):
-    """
-    Анализирует полный набор данных по кандидату для генерации фидбэка.
-    """
     if not cv_file.filename.lower().endswith(('.pdf', '.docx', '.txt')):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -81,33 +76,4 @@ async def analyze_results_endpoint(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Произошла внутренняя ошибка сервера: {str(e)}"
-        )
-
-
-@router.post(
-    "/export-pdf",
-    summary="Экспорт отчета в PDF",
-    description="Принимает JSON с результатами анализа и возвращает PDF файл.",
-    response_class=Response
-)
-async def export_pdf_endpoint(
-        report_data: FullReport
-):
-    """
-    Принимает JSON с данными отчета и генерирует PDF файл.
-    """
-    try:
-        pdf_buffer = generate_interview_report_pdf(report_data)
-
-        headers = {
-            'Content-Disposition': f'attachment; filename="Interview_Report_{report_data.candidate_info.full_name.replace(" ", "_")}.pdf"'
-        }
-
-        return StreamingResponse(pdf_buffer, media_type='application/pdf', headers=headers)
-
-    except Exception as e:
-        logger.error(f"Ошибка при генерации PDF: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Не удалось сгенерировать PDF отчет: {str(e)}"
         )

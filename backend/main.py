@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware  # 1. Импортируем CORSMiddleware
+from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 from backend.api.routes import prep, results
 from backend.core.config import settings

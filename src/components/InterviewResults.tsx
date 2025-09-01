@@ -15,10 +15,21 @@ import {
   UserCheck,
   ClipboardList,
   FileJson,
-  BookUser,
-  CheckCircle,
-  TrendingUp
+  BookUser
 } from "lucide-react";
+import { jsPDF } from 'jspdf';
+import 'jspdf-autotable';
+
+const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return window.btoa(binary);
+};
+
 
 export default function InterviewResults() {
 
@@ -50,7 +61,6 @@ export default function InterviewResults() {
     setAnalysisResults(null);
     try {
       const form = new FormData();
-
       form.append("cv_file", cvFile);
       form.append("video_link", videoLink);
       form.append("competency_matrix_link", competencyMatrixLink);
@@ -77,40 +87,111 @@ export default function InterviewResults() {
   const handleExportPdf = async () => {
     if (!analysisResults || !analysisResults.report) return;
     setIsExporting(true);
-    try {
-      const response = await fetch("/api/results/export-pdf", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(analysisResults.report),
-      });
 
-      if (!response.ok) {
-        throw new Error("Не удалось сгенерировать PDF отчет.");
+    try {
+      const doc = new jsPDF();
+      const report = analysisResults.report;
+      const margin = 15;
+
+      const fontNormalResponse = await fetch('/fonts/Roboto-Light.ttf');
+      const fontNormalBuffer = await fontNormalResponse.arrayBuffer();
+      const fontNormalBase64 = arrayBufferToBase64(fontNormalBuffer);
+
+      const fontBoldResponse = await fetch('/fonts/Roboto-SemiBold.ttf');
+      const fontBoldBuffer = await fontBoldResponse.arrayBuffer();
+      const fontBoldBase64 = arrayBufferToBase64(fontBoldBuffer);
+
+      doc.addFileToVFS('Roboto-Light.ttf', fontNormalBase64);
+      doc.addFont('Roboto-Light.ttf', 'Roboto', 'normal');
+
+      doc.addFileToVFS('Roboto-SemiBold.ttf', fontBoldBase64);
+      doc.addFont('Roboto-SemiBold.ttf', 'Roboto', 'bold');
+
+      doc.setFont('Roboto', 'normal');
+
+      doc.setFontSize(14);
+      doc.setFont('Roboto', 'bold');
+      doc.text(`Фидбек на кандидата ${report.candidate_info.full_name}`, margin, 20);
+      doc.setFont('Roboto', 'normal');
+
+      doc.setFontSize(10);
+
+      let y = 30;
+
+      const addWrappedText = (text: string, options: { x?: number; maxWidth?: number; isBold?: boolean } = {}) => {
+        const maxWidth = options.maxWidth || 180;
+        const x = options.x || margin;
+
+        doc.setFont('Roboto', options.isBold ? 'bold' : 'normal');
+
+        const lines = doc.splitTextToSize(text, maxWidth);
+        const textHeight = lines.length * 5;
+
+        if (y + textHeight > 280) {
+            doc.addPage();
+            y = margin;
+        }
+        doc.text(lines, x, y);
+        y += textHeight + 2;
+      };
+
+      addWrappedText(`AI-generated summary: ${report.ai_summary}`);
+      y += 5;
+
+      doc.setFontSize(12);
+      addWrappedText('1. Информация о кандидате', {isBold: true});
+      doc.setFontSize(10);
+      addWrappedText(`1.1 Опыт`, { x: margin + 5, isBold: true });
+      addWrappedText(`• Количество лет опыта: ${report.candidate_info.experience_years}`, {x: margin + 10});
+      addWrappedText(`• Стеки технологий: ${report.candidate_info.tech_stack.join(', ')}`, {x: margin + 10});
+      addWrappedText(`• Домены: ${report.candidate_info.domains.join(', ')}`, {x: margin + 10});
+      addWrappedText(`• Задачи, которые выполнял(а): ${report.candidate_info.tasks.join(', ')}`, {x: margin + 10});
+      y += 2;
+      addWrappedText(`1.2 Технические знания`, { x: margin + 5, isBold: true });
+      addWrappedText(`• Темы, которые затрагивались на собеседовании: ${report.interview_analysis.topics.join(', ')}`, {x: margin + 10});
+      y += 5;
+
+      doc.setFontSize(12);
+      addWrappedText('2. Оценка технических знаний', {isBold: true});
+      doc.setFontSize(10);
+      addWrappedText(report.interview_analysis.tech_assessment);
+      y += 5;
+
+      doc.setFontSize(12);
+      addWrappedText('3. Оценка коммуникационных навыков', {isBold: true});
+      doc.setFontSize(10);
+      addWrappedText(report.interview_analysis.comm_skills_assessment);
+      y += 5;
+
+      doc.setFontSize(12);
+      addWrappedText('4. Заключение', {isBold: true});
+      doc.setFontSize(10);
+      addWrappedText(`1. ${report.conclusion.recommendation}`, {x: margin + 5});
+      addWrappedText(`2. По уровню знаний оцениваем его на уровень ${report.conclusion.assessed_level}`, {x: margin + 5});
+      addWrappedText(`3. ${report.conclusion.summary}`, {x: margin + 5});
+      y += 5;
+
+      doc.setFontSize(12);
+      addWrappedText('5. Рекомендации для кандидата', {isBold: true});
+      doc.setFontSize(10);
+      if (report.recommendations_for_candidate && report.recommendations_for_candidate.length > 0) {
+        report.recommendations_for_candidate.forEach((rec: string) => {
+            addWrappedText(`• ${rec}`, {x: margin + 5});
+        });
+      } else {
+        addWrappedText("Рекомендации не сгенерированы.", {x: margin + 5});
       }
 
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-
-      const fullName = analysisResults.report.candidate_info.full_name.replace(/\s+/g, '_');
-      a.download = `Interview_Report_${fullName}.pdf`;
-
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
+      const fullName = report.candidate_info.full_name.replace(/\s+/g, '_');
+      doc.save(`Отчет по интервью ${fullName}.pdf`);
 
     } catch (error) {
-      console.error("Ошибка при экспорте PDF:", error);
-      alert(`Произошла ошибка при экспорте: ${error instanceof Error ? error.message : String(error)}`);
+      console.error("Ошибка при создании PDF:", error);
+      alert("Не удалось создать PDF файл.");
     } finally {
       setIsExporting(false);
     }
   };
-
-  // Этот компонент нам больше не нужен, так как списки теперь текстовые
-  // const BulletList = ({ items }: { items: string[] }) => ( ... );
 
   return (
     <div className="space-y-6 p-4 md:p-6">
@@ -200,7 +281,6 @@ export default function InterviewResults() {
                 {isExporting ? 'Экспорт...' : <><Download className="w-4 h-4 mr-2" /> Скачать PDF</>}
               </Button>
             </div>
-
             <div className="space-y-3 text-sm text-gray-800">
               <p><b>AI-generated summary:</b> {analysisResults.report.ai_summary}</p>
 
@@ -233,9 +313,13 @@ export default function InterviewResults() {
               </div>
 
               <h3 className="text-base font-bold pt-2">5. Рекомендации для кандидата</h3>
-              <ul className="pl-4 list-disc list-inside space-y-1">
-                 {analysisResults.report.recommendations_for_candidate.map((rec: string, i: number) => <li key={i}>{rec}</li>)}
-              </ul>
+                {analysisResults.report.recommendations_for_candidate.length > 0 ? (
+                    <ul className="pl-4 list-disc list-inside space-y-1">
+                        {analysisResults.report.recommendations_for_candidate.map((rec: string, i: number) => <li key={i}>{rec}</li>)}
+                    </ul>
+                ) : (
+                    <p className="pl-4 text-gray-500 italic">Рекомендации не сгенерированы.</p>
+                )}
             </div>
           </div>
         )}
