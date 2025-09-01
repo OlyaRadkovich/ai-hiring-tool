@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 from google.adk.agents import Agent
 
 agent_4_topic_extractor = Agent(

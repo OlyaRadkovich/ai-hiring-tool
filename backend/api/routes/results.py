@@ -1,10 +1,12 @@
+import io
 from fastapi import APIRouter, UploadFile, File, Form, status, HTTPException, Depends
+from fastapi.responses import Response
 from loguru import logger
-from backend.api.models import ResultsAnalysis, ErrorResponse
+from backend.api.models import ResultsAnalysis, ErrorResponse, FullReport
 from backend.services.analysis_service import AnalysisService
 from backend.api.deps import get_analysis_service
 from googleapiclient.errors import HttpError
-from fastapi.responses import StreamingResponse
+from backend.utils import file_processing as fp
 
 router = APIRouter()
 
@@ -19,28 +21,38 @@ router = APIRouter()
         500: {"model": ErrorResponse},
     },
     summary="Анализ результатов интервью",
-    description="Принимает ссылку на видеоинтервью и матрицу компетенций для генерации фидбэка."
+    description="Принимает полный набор данных для генерации развернутого фидбэка по кандидату.."
 )
 async def analyze_results_endpoint(
-        video_link: str = Form(..., description="Link to the interview video."),
-        matrix_file: UploadFile = File(..., description="Competency matrix file (.xlsx, .xls, .csv, .pdf)."),
+        cv_file: UploadFile = File(..., description="Резюме кандидата (.pdf, .docx)."),
+        video_link: str = Form(..., description="Ссылка на видеозапись собеседования."),
+        competency_matrix_link: str = Form(..., description="Ссылка на матрицу компетенций QA/AQA."),
+        department_values_link: str = Form(..., description="Ссылка на ценности департамента."),
+        employee_portrait_link: str = Form(..., description="Ссылка на портрет сотрудника."),
+        job_requirements_link: str = Form(..., description="Ссылка на требования к вакансии."),
         analysis_service: AnalysisService = Depends(get_analysis_service)
 ):
     """
-    Анализирует видеоинтервью и матрицу компетенций для генерации фидбэка и оценок.
+    Анализирует полный набор данных по кандидату для генерации фидбэка.
     """
-    if not matrix_file.filename.lower().endswith(('.pdf', '.xls', '.xlsx', '.csv')):
+    if not cv_file.filename.lower().endswith(('.pdf', '.docx', '.txt')):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Недопустимый тип файла для матрицы компетенций."
+            detail="Недопустимый тип файла для CV. Разрешены .txt, .pdf и .docx."
         )
 
     try:
-        matrix_content_bytes = await matrix_file.read()
+        cv_content_bytes = await cv_file.read()
+        cv_file_like_object = io.BytesIO(cv_content_bytes)
 
         analysis_result = await analysis_service.analyze_results(
+            cv_file=cv_file_like_object,
+            cv_filename=cv_file.filename,
             video_link=video_link,
-            matrix_content=matrix_content_bytes
+            competency_matrix_link=competency_matrix_link,
+            department_values_link=department_values_link,
+            employee_portrait_link=employee_portrait_link,
+            job_requirements_link=job_requirements_link
         )
         return analysis_result
 
@@ -73,30 +85,29 @@ async def analyze_results_endpoint(
 
 
 @router.post(
-    "/export",
-    summary="Экспорт отчета в DOCX",
-    description="Принимает JSON с результатами анализа и возвращает DOCX файл.",
-    response_class=StreamingResponse
+    "/export-pdf",
+    summary="Экспорт отчета в PDF",
+    description="Принимает JSON с результатами анализа и возвращает PDF файл.",
+    response_class=Response
 )
-async def export_results_endpoint(
-        results: ResultsAnalysis,
-        analysis_service: AnalysisService = Depends(get_analysis_service)
+async def export_pdf_endpoint(
+        report_data: FullReport
 ):
+    """
+    Принимает JSON с данными отчета и генерирует PDF файл.
+    """
     try:
-        file_stream = analysis_service.create_docx_report(results)
+        pdf_buffer = generate_interview_report_pdf(report_data)
 
         headers = {
-            'Content-Disposition': 'attachment; filename="Interview_Report.docx"'
+            'Content-Disposition': f'attachment; filename="Interview_Report_{report_data.candidate_info.full_name.replace(" ", "_")}.pdf"'
         }
 
-        return StreamingResponse(
-            file_stream,
-            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            headers=headers
-        )
+        return StreamingResponse(pdf_buffer, media_type='application/pdf', headers=headers)
+
     except Exception as e:
-        logger.error(f"Ошибка при создании DOCX отчета: {e}", exc_info=True)
+        logger.error(f"Ошибка при генерации PDF: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Не удалось сгенерировать DOCX отчет: {str(e)}"
+            detail=f"Не удалось сгенерировать PDF отчет: {str(e)}"
         )

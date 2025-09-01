@@ -11,16 +11,13 @@ import {
   Brain,
   Download,
   FileText,
-  CheckCircle,
-  AlertCircle,
-  TrendingUp,
-  Users,
-  Target,
-  FileJson,
-  BookUser,
   Building,
   UserCheck,
-  ClipboardList
+  ClipboardList,
+  FileJson,
+  BookUser,
+  CheckCircle,
+  TrendingUp
 } from "lucide-react";
 
 export default function InterviewResults() {
@@ -50,19 +47,17 @@ export default function InterviewResults() {
     }
 
     setIsProcessing(true);
+    setAnalysisResults(null);
     try {
       const form = new FormData();
 
       form.append("cv_file", cvFile);
-
       form.append("video_link", videoLink);
       form.append("competency_matrix_link", competencyMatrixLink);
       form.append("department_values_link", departmentValuesLink);
       form.append("employee_portrait_link", employeePortraitLink);
       form.append("job_requirements_link", jobRequirementsLink);
 
-      // !! ВАЖНО: URL эндпоинта и названия полей в FormData
-      //    должны будут соответствовать бэкенду, когда мы его обновим.
       const res = await fetch("/api/results/", { method: "POST", body: form });
 
       if (!res.ok) {
@@ -79,42 +74,43 @@ export default function InterviewResults() {
     }
   };
 
-  const handleExportDocx = async () => {
-    if (!analysisResults) return;
+  const handleExportPdf = async () => {
+    if (!analysisResults || !analysisResults.report) return;
     setIsExporting(true);
     try {
-      const response = await fetch("/api/results/export", {
+      const response = await fetch("/api/results/export-pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(analysisResults),
+        body: JSON.stringify(analysisResults.report),
       });
 
       if (!response.ok) {
-        throw new Error("Не удалось сгенерировать DOCX отчет.");
+        throw new Error("Не удалось сгенерировать PDF отчет.");
       }
 
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "Interview_Report.docx";
+
+      const fullName = analysisResults.report.candidate_info.full_name.replace(/\s+/g, '_');
+      a.download = `Interview_Report_${fullName}.pdf`;
+
       document.body.appendChild(a);
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
 
     } catch (error) {
-      console.error("Ошибка при экспорте DOCX:", error);
+      console.error("Ошибка при экспорте PDF:", error);
+      alert(`Произошла ошибка при экспорте: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setIsExporting(false);
     }
   };
 
-  const getScoreColor = (score: number) => {
-    if (score >= 80) return "text-green-600";
-    if (score >= 60) return "text-yellow-600";
-    return "text-red-600";
-  };
+  // Этот компонент нам больше не нужен, так как списки теперь текстовые
+  // const BulletList = ({ items }: { items: string[] }) => ( ... );
 
   return (
     <div className="space-y-6 p-4 md:p-6">
@@ -152,13 +148,10 @@ export default function InterviewResults() {
           <CardHeader>
             <CardTitle className="flex items-center space-x-2"><FileJson className="w-5 h-5 text-accent" /><span>Дополнительные материалы (Google Drive)</span></CardTitle>
             <CardDescription>Ссылки на Google-таблицы с критериями.</CardDescription>
-            <CardDescription>Вы можете использовать стандартные или указать свои.</CardDescription>
-            <CardDescription>ВАЖНО! При изменении ссылки убедитесь, что документ является Google-таблицей и находится в папке, куда у приложения есть доступ уровня Contributor/Editor.</CardDescription>
-            <CardDescription>Чтобы открыть доступ, добавьте почту приложения в share. Почта: ai-hiring-tool-service@ai-hiring-tool.iam.gserviceaccount.com</CardDescription>
           </CardHeader>
           <CardContent className="grid md:grid-cols-2 gap-6">
             <div className="space-y-2">
-                <Label htmlFor="competency-matrix-link" className="flex items-center space-x-2"><FileText className="w-4 h-4" /><span>Матрица компетенций QA/AQA</span></Label>
+                <Label htmlFor="competency-matrix-link" className="flex items-center space-x-2"><FileText className="w-4 h-4" /><span>Матрица компетенций</span></Label>
                 <Input id="competency-matrix-link" type="url" value={competencyMatrixLink} onChange={(e) => setCompetencyMatrixLink(e.target.value)} />
             </div>
             <div className="space-y-2">
@@ -187,10 +180,64 @@ export default function InterviewResults() {
         </Button>
       </div>
 
-      {analysisResults && (
-        <div className="space-y-8 pt-6">
-        </div>
-      )}
+      <>
+        {isProcessing && !analysisResults && (
+          <div className="text-center py-10">
+              <p>Идет анализ... Это может занять несколько минут.</p>
+              <Progress value={50} className="w-1-2 mx-auto mt-4 animate-pulse" />
+          </div>
+        )}
+
+        {analysisResults && analysisResults.report && (
+          <div className="p-6 border rounded-lg mt-6 bg-white shadow-sm font-sans">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold">
+                Фидбек на кандидата {analysisResults.report.candidate_info.full_name}
+              </h2>
+              <Button onClick={handleExportPdf} disabled={isExporting}>
+                {isExporting ? 'Экспорт...' : <><Download className="w-4 h-4 mr-2" /> Скачать PDF</>}
+              </Button>
+            </div>
+
+            <div className="space-y-3 text-sm text-gray-800">
+              <p><b>AI-generated summary:</b> {analysisResults.report.ai_summary}</p>
+
+              <h3 className="text-base font-bold pt-2">1. Информация о кандидате</h3>
+              <div className="pl-4">
+                <p className="font-semibold">1.1 Опыт</p>
+                <div className="pl-4 space-y-1">
+                    <p>• <b>Количество лет опыта:</b> {analysisResults.report.candidate_info.experience_years}</p>
+                    <p>• <b>Стеки технологий:</b> {analysisResults.report.candidate_info.tech_stack.join(', ')}</p>
+                    <p>• <b>Домены:</b> {analysisResults.report.candidate_info.domains.join(', ')}</p>
+                    <p>• <b>Задачи, которые выполнял(а) на предыдущих проектах:</b> {analysisResults.report.candidate_info.tasks.join(', ')}</p>
+                </div>
+                <p className="font-semibold mt-2">1.2 Технические знания</p>
+                <div className="pl-4 space-y-1">
+                    <p>• <b>Темы, которые затрагивались на собеседовании:</b> {analysisResults.report.interview_analysis.topics.join(', ')}</p>
+                </div>
+              </div>
+
+              <h3 className="text-base font-bold pt-2">2. Оценка технических знаний</h3>
+              <p>{analysisResults.report.interview_analysis.tech_assessment}</p>
+
+              <h3 className="text-base font-bold pt-2">3. Оценка коммуникационных навыков</h3>
+              <p>{analysisResults.report.interview_analysis.comm_skills_assessment}</p>
+
+              <h3 className="text-base font-bold pt-2">4. Заключение</h3>
+              <div className="pl-4 space-y-1">
+                <p>1. {analysisResults.report.conclusion.recommendation}</p>
+                <p>2. По уровню знаний оцениваем его на уровень {analysisResults.report.conclusion.assessed_level}</p>
+                <p>3. {analysisResults.report.conclusion.summary}</p>
+              </div>
+
+              <h3 className="text-base font-bold pt-2">5. Рекомендации для кандидата</h3>
+              <ul className="pl-4 list-disc list-inside space-y-1">
+                 {analysisResults.report.recommendations_for_candidate.map((rec: string, i: number) => <li key={i}>{rec}</li>)}
+              </ul>
+            </div>
+          </div>
+        )}
+      </>
     </div>
   );
 }
