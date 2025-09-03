@@ -18,7 +18,7 @@ import {
   BookUser
 } from "lucide-react";
 import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 
 const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
   let binary = '';
@@ -89,101 +89,95 @@ export default function InterviewResults() {
     setIsExporting(true);
 
     try {
-      const doc = new jsPDF();
-      const report = analysisResults.report;
-      const margin = 15;
+        const doc = new jsPDF();
+        const report = analysisResults.report;
 
-      const fontNormalResponse = await fetch('/fonts/Roboto-Light.ttf');
-      const fontNormalBuffer = await fontNormalResponse.arrayBuffer();
-      const fontNormalBase64 = arrayBufferToBase64(fontNormalBuffer);
+        const fontNormalResponse = await fetch('/fonts/Roboto-Light.ttf');
+        const fontNormalBuffer = await fontNormalResponse.arrayBuffer();
 
-      const fontBoldResponse = await fetch('/fonts/Roboto-SemiBold.ttf');
-      const fontBoldBuffer = await fontBoldResponse.arrayBuffer();
-      const fontBoldBase64 = arrayBufferToBase64(fontBoldBuffer);
+        const fontBoldResponse = await fetch('/fonts/Roboto-SemiBold.ttf');
+        const fontBoldBuffer = await fontBoldResponse.arrayBuffer();
 
-      doc.addFileToVFS('Roboto-Light.ttf', fontNormalBase64);
-      doc.addFont('Roboto-Light.ttf', 'Roboto', 'normal');
+        doc.addFileToVFS('Roboto-Light.ttf', arrayBufferToBase64(fontNormalBuffer));
+        doc.addFont('Roboto-Light.ttf', 'Roboto', 'normal');
 
-      doc.addFileToVFS('Roboto-SemiBold.ttf', fontBoldBase64);
-      doc.addFont('Roboto-SemiBold.ttf', 'Roboto', 'bold');
+        doc.addFileToVFS('Roboto-SemiBold.ttf', arrayBufferToBase64(fontBoldBuffer));
+        doc.addFont('Roboto-SemiBold.ttf', 'Roboto', 'bold');
 
-      doc.setFont('Roboto', 'normal');
+        doc.setFont('Roboto');
 
-      doc.setFontSize(14);
-      doc.setFont('Roboto', 'bold');
-      doc.text(`Фидбек на кандидата ${report.candidate_info.full_name}`, margin, 20);
-      doc.setFont('Roboto', 'normal');
+        doc.setFontSize(14);
+        doc.setFont('Roboto', 'bold');
+        doc.text(`Фидбек на кандидата ${report.candidate_info.full_name}`, 15, 15);
 
-      doc.setFontSize(10);
+        const body = [
+          [{ content: `**AI-generated summary:** ${report.ai_summary}`, colSpan: 2, styles: { fontStyle: 'normal' } }],
+          [{ content: ' ', colSpan: 2, styles: { minCellHeight: 5 } }],
 
-      let y = 30;
+          [{ content: '**1. Информация о кандидате**', colSpan: 2, styles: { fontSize: 12, fontStyle: 'bold' } }],
+          [{ content: '**1.1 Опыт**', colSpan: 2, styles: { fontStyle: 'bold' } }],
+          ['**● Количество лет опыта:**', report.candidate_info.experience_years],
+          ['**● Стеки технологий:**', report.candidate_info.tech_stack.join(', ')],
+          ['**● Проекты:**', report.candidate_info.projects.join(', ')],
+          ['**● Домены:**', report.candidate_info.domains.join(', ')],
+          ['**● Задачи, которые выполнял(а):**', report.candidate_info.tasks.join(', ')],
 
-      const addWrappedText = (text: string, options: { x?: number; maxWidth?: number; isBold?: boolean } = {}) => {
-        const maxWidth = options.maxWidth || 180;
-        const x = options.x || margin;
+          [{ content: '**1.2 Технические знания**', colSpan: 2, styles: { fontStyle: 'bold' } }],
+          ['**● Темы, которые затрагивались на собеседовании:**', report.interview_analysis.topics.join(', ')],
+          ['**● Тех задание:**', report.interview_analysis.tech_assignment],
+          ['**● Оценка знаний по этим темам:**', report.interview_analysis.knowledge_assessment],
 
-        doc.setFont('Roboto', options.isBold ? 'bold' : 'normal');
+          [{ content: '**1.3 Коммуникационные навыки**', colSpan: 2, styles: { fontStyle: 'bold' } }],
+          ['**● Оценка коммуникационных навыков:**', report.communication_skills.assessment],
 
-        const lines = doc.splitTextToSize(text, maxWidth);
-        const textHeight = lines.length * 5;
+          [{ content: '**1.4 Иностранные языки**', colSpan: 2, styles: { fontStyle: 'bold' } }],
+          ['**● Уровень владения иностранными языками:**', report.foreign_languages.assessment],
+          [{ content: ' ', colSpan: 2, styles: { minCellHeight: 5 } }],
 
-        if (y + textHeight > 280) {
-            doc.addPage();
-            y = margin;
-        }
-        doc.text(lines, x, y);
-        y += textHeight + 2;
-      };
+          [{ content: '**2. Соответствие команде**', colSpan: 2, styles: { fontSize: 12, fontStyle: 'bold' } }],
+          ['**● Насколько кандидат соответствует ценностям и взглядам команды:**', report.team_fit],
+          [{ content: ' ', colSpan: 2, styles: { minCellHeight: 5 } }],
 
-      addWrappedText(`AI-generated summary: ${report.ai_summary}`);
-      y += 5;
+          [{ content: '**3. Дополнительная информация**', colSpan: 2, styles: { fontSize: 12, fontStyle: 'bold' } }],
+          ...report.additional_information.length > 0
+            ? report.additional_information.map((info: string) => [{ content: `○ ${info}`, colSpan: 2, styles: { fontStyle: 'normal' } }])
+            : [[{ content: 'Нет.', colSpan: 2, styles: { fontStyle: 'normal' } }]],
+          [{ content: ' ', colSpan: 2, styles: { minCellHeight: 5 } }],
 
-      doc.setFontSize(12);
-      addWrappedText('1. Информация о кандидате', {isBold: true});
-      doc.setFontSize(10);
-      addWrappedText(`1.1 Опыт`, { x: margin + 5, isBold: true });
-      addWrappedText(`• Количество лет опыта: ${report.candidate_info.experience_years}`, {x: margin + 10});
-      addWrappedText(`• Стеки технологий: ${report.candidate_info.tech_stack.join(', ')}`, {x: margin + 10});
-      addWrappedText(`• Домены: ${report.candidate_info.domains.join(', ')}`, {x: margin + 10});
-      addWrappedText(`• Задачи, которые выполнял(а): ${report.candidate_info.tasks.join(', ')}`, {x: margin + 10});
-      y += 2;
-      addWrappedText(`1.2 Технические знания`, { x: margin + 5, isBold: true });
-      addWrappedText(`• Темы, которые затрагивались на собеседовании: ${report.interview_analysis.topics.join(', ')}`, {x: margin + 10});
-      y += 5;
+          [{ content: '**4. Заключение**', colSpan: 2, styles: { fontSize: 12, fontStyle: 'bold' } }],
+          [{ content: `1. ${report.conclusion.recommendation}`, colSpan: 2, styles: { fontStyle: 'normal' } }],
+          [{ content: `2. По уровню знаний оцениваем его на уровень ${report.conclusion.assessed_level}`, colSpan: 2, styles: { fontStyle: 'normal' } }],
+          [{ content: `3. ${report.conclusion.summary}`, colSpan: 2, styles: { fontStyle: 'normal' } }],
+          [{ content: ' ', colSpan: 2, styles: { minCellHeight: 5 } }],
 
-      doc.setFontSize(12);
-      addWrappedText('2. Оценка технических знаний', {isBold: true});
-      doc.setFontSize(10);
-      addWrappedText(report.interview_analysis.tech_assessment);
-      y += 5;
+          [{ content: '**5. Рекомендации для кандидата**', colSpan: 2, styles: { fontSize: 12, fontStyle: 'bold' } }],
+          ...report.recommendations_for_candidate.length > 0
+            ? report.recommendations_for_candidate.map((rec: string) => [{ content: `● ${rec}`, colSpan: 2, styles: { fontStyle: 'normal' } }])
+            : [[{ content: 'Рекомендации не сгенерированы.', colSpan: 2, styles: { fontStyle: 'normal' } }]],
+        ];
 
-      doc.setFontSize(12);
-      addWrappedText('3. Оценка коммуникационных навыков', {isBold: true});
-      doc.setFontSize(10);
-      addWrappedText(report.interview_analysis.comm_skills_assessment);
-      y += 5;
-
-      doc.setFontSize(12);
-      addWrappedText('4. Заключение', {isBold: true});
-      doc.setFontSize(10);
-      addWrappedText(`1. ${report.conclusion.recommendation}`, {x: margin + 5});
-      addWrappedText(`2. По уровню знаний оцениваем его на уровень ${report.conclusion.assessed_level}`, {x: margin + 5});
-      addWrappedText(`3. ${report.conclusion.summary}`, {x: margin + 5});
-      y += 5;
-
-      doc.setFontSize(12);
-      addWrappedText('5. Рекомендации для кандидата', {isBold: true});
-      doc.setFontSize(10);
-      if (report.recommendations_for_candidate && report.recommendations_for_candidate.length > 0) {
-        report.recommendations_for_candidate.forEach((rec: string) => {
-            addWrappedText(`• ${rec}`, {x: margin + 5});
+        autoTable(doc, {
+            startY: 25,
+            body: body,
+            theme: 'plain',
+            styles: {
+                font: 'Roboto',
+                fontSize: 10,
+                cellPadding: { top: 0, right: 0, bottom: 1, left: 0 },
+            },
+            columnStyles: {
+                0: { fontStyle: 'bold', cellWidth: 70 }, // Первая колонка жирная
+                1: { fontStyle: 'normal' }, // Вторая колонка обычная
+            },
+            didParseCell: (data) => {
+                if (typeof data.cell.text[0] === 'string') {
+                    data.cell.text = data.cell.text[0].replace(/\*\*/g, '');
+                }
+            }
         });
-      } else {
-        addWrappedText("Рекомендации не сгенерированы.", {x: margin + 5});
-      }
 
-      const fullName = report.candidate_info.full_name.replace(/\s+/g, '_');
-      doc.save(`Отчет по интервью ${fullName}.pdf`);
+        const fullName = report.candidate_info.full_name.replace(/\s+/g, '_');
+        doc.save(`Interview_Report_${fullName}.pdf`);
 
     } catch (error) {
       console.error("Ошибка при создании PDF:", error);
@@ -218,7 +212,6 @@ export default function InterviewResults() {
           <CardHeader>
             <CardTitle className="flex items-center space-x-2"><Video className="w-5 h-5 text-primary" /><span>Видеозапись собеседования</span></CardTitle>
             <CardDescription>Вставьте ссылку на видео в Google Drive</CardDescription>
-            <CardDescription>Видео должно находится в папке, к которой у сервиса ai-hiring-tool-service@ai-hiring-tool.iam.gserviceaccount.com есть доступ уровня Contributor/Editor</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <Label htmlFor="video-link">Ссылка на видео</Label>
@@ -230,7 +223,6 @@ export default function InterviewResults() {
           <CardHeader>
             <CardTitle className="flex items-center space-x-2"><FileJson className="w-5 h-5 text-accent" /><span>Дополнительные материалы (Google Drive)</span></CardTitle>
             <CardDescription>Ссылки на Google-таблицы с критериями.</CardDescription>
-            <CardDescription>При изменении ссылки убедитесь, что документ является Google-таблицей и находится в папке, к которой у сервиса ai-hiring-tool-service@ai-hiring-tool.iam.gserviceaccount.com есть доступ уровня Contributor/Editor.</CardDescription>
           </CardHeader>
           <CardContent className="grid md:grid-cols-2 gap-6">
             <div className="space-y-2">
@@ -290,20 +282,40 @@ export default function InterviewResults() {
                 <div className="pl-4 space-y-1">
                     <p>• <b>Количество лет опыта:</b> {analysisResults.report.candidate_info.experience_years}</p>
                     <p>• <b>Стеки технологий:</b> {analysisResults.report.candidate_info.tech_stack.join(', ')}</p>
+                    <p>• <b>Проекты:</b> {analysisResults.report.candidate_info.projects.join(', ')}</p>
                     <p>• <b>Домены:</b> {analysisResults.report.candidate_info.domains.join(', ')}</p>
                     <p>• <b>Задачи, которые выполнял(а) на предыдущих проектах:</b> {analysisResults.report.candidate_info.tasks.join(', ')}</p>
                 </div>
+
                 <p className="font-semibold mt-2">1.2 Технические знания</p>
                 <div className="pl-4 space-y-1">
                     <p>• <b>Темы, которые затрагивались на собеседовании:</b> {analysisResults.report.interview_analysis.topics.join(', ')}</p>
+                    <p>• <b>Тех задание:</b> {analysisResults.report.interview_analysis.tech_assignment}</p>
+                    <p>• <b>Оценка знаний по этим темам:</b> {analysisResults.report.interview_analysis.knowledge_assessment}</p>
+                </div>
+
+                <p className="font-semibold mt-2">1.3 Коммуникационные навыки</p>
+                <div className="pl-4 space-y-1">
+                    <p>• <b>Оценка коммуникационных навыков:</b> {analysisResults.report.communication_skills.assessment}</p>
+                </div>
+
+                <p className="font-semibold mt-2">1.4 Иностранные языки</p>
+                <div className="pl-4 space-y-1">
+                  <p>• <b>Уровень владения иностранными языками:</b> {analysisResults.report.foreign_languages.assessment}</p>
                 </div>
               </div>
 
-              <h3 className="text-base font-bold pt-2">2. Оценка технических знаний</h3>
-              <p>{analysisResults.report.interview_analysis.tech_assessment}</p>
+              <h3 className="text-base font-bold pt-2">2. Соответствие команде</h3>
+              <p><b>Насколько кандидат соответствует ценностям и взглядам команды:</b> {analysisResults.report.team_fit}</p>
 
-              <h3 className="text-base font-bold pt-2">3. Оценка коммуникационных навыков</h3>
-              <p>{analysisResults.report.interview_analysis.comm_skills_assessment}</p>
+              <h3 className="text-base font-bold pt-2">3. Дополнительная информация</h3>
+              <div className="pl-4 space-y-1">
+                {analysisResults.report.additional_information.length > 0 ? (
+                  analysisResults.report.additional_information.map((info: string, i: number) => <p key={i}>○ {info}</p>)
+                ) : (
+                  <p className="italic">Нет.</p>
+                )}
+              </div>
 
               <h3 className="text-base font-bold pt-2">4. Заключение</h3>
               <div className="pl-4 space-y-1">
