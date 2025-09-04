@@ -5,6 +5,7 @@ import io
 from backend.api.models import PreparationAnalysis, ErrorResponse
 from backend.services.analysis_service import AnalysisService
 from backend.api.deps import get_analysis_service
+from backend.utils.validators import FileValidator
 
 router = APIRouter()
 
@@ -25,12 +26,7 @@ async def analyze_preparation_endpoint(
         requirements_link: str = Form(..., description="Ссылка на Google Таблицу с требованиями."),
         analysis_service: AnalysisService = Depends(get_analysis_service)
 ):
-    allowed_extensions = ('.txt', '.pdf', '.docx')
-    if not cv_file.filename or not cv_file.filename.lower().endswith(allowed_extensions):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Недопустимый тип файла для резюме: {cv_file.filename}. Разрешены: .txt, .pdf, .docx."
-        )
+    FileValidator.validate_cv_file_prep(cv_file)
 
     try:
         logger.info("Получен новый запрос на оценку кандидата.")

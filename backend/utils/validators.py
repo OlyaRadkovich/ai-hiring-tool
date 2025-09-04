@@ -2,25 +2,27 @@ from fastapi import HTTPException, status
 from fastapi import UploadFile
 import os
 
+
 class FileValidator:
     """Utility class for file validation"""
-    
+
     ALLOWED_EXTENSIONS = {
-        'cv': ['.pdf', '.doc', '.docx'],
+        'cv_prep': ['.pdf', '.doc', '.docx', '.txt'],
+        'cv_results': ['.pdf', '.doc', '.docx', '.txt'],
         'matrix': ['.xlsx', '.xls', '.csv', '.pdf']
     }
-    
+
     MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
-    
+
     @classmethod
     def validate_file_size(cls, file: UploadFile) -> None:
         """Validate file size"""
         if file.size and file.size > cls.MAX_FILE_SIZE:
             raise HTTPException(
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail=f"File size exceeds maximum allowed size of {cls.MAX_FILE_SIZE // (1024*1024)}MB"
+                detail=f"File size exceeds maximum allowed size of {cls.MAX_FILE_SIZE // (1024 * 1024)}MB"
             )
-    
+
     @classmethod
     def validate_file_extension(cls, file: UploadFile, file_type: str) -> None:
         """Validate file extension"""
@@ -30,17 +32,17 @@ class FileValidator:
                 if file_ext not in cls.ALLOWED_EXTENSIONS[file_type]:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f"Invalid file type. Allowed types: {', '.join(cls.ALLOWED_EXTENSIONS[file_type])}"
+                        detail=f"Invalid file type for {file_type}. Allowed types: {', '.join(cls.ALLOWED_EXTENSIONS[file_type])}"
                     )
-    
+
     @classmethod
-    def validate_cv_file(cls, file: UploadFile) -> None:
-        """Validate CV file"""
+    def validate_cv_file_prep(cls, file: UploadFile) -> None:
+        """Validate CV file for preparation endpoint"""
         cls.validate_file_size(file)
-        cls.validate_file_extension(file, 'cv')
-    
+        cls.validate_file_extension(file, 'cv_prep')
+
     @classmethod
-    def validate_matrix_file(cls, file: UploadFile) -> None:
-        """Validate competency matrix file"""
+    def validate_cv_file_results(cls, file: UploadFile) -> None:
+        """Validate CV file for results endpoint"""
         cls.validate_file_size(file)
-        cls.validate_file_extension(file, 'matrix')
+        cls.validate_file_extension(file, 'cv_results')

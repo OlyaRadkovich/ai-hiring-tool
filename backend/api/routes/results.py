@@ -5,6 +5,7 @@ from backend.api.models import ResultsAnalysis, ErrorResponse
 from backend.services.analysis_service import AnalysisService
 from backend.api.deps import get_analysis_service
 from googleapiclient.errors import HttpError
+from backend.utils.validators import FileValidator
 
 router = APIRouter()
 
@@ -30,11 +31,7 @@ async def analyze_results_endpoint(
         job_requirements_link: str = Form(..., description="Ссылка на требования к вакансии."),
         analysis_service: AnalysisService = Depends(get_analysis_service)
 ):
-    if not cv_file.filename.lower().endswith(('.pdf', '.docx', '.txt')):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Недопустимый тип файла для CV. Разрешены .txt, .pdf и .docx."
-        )
+    FileValidator.validate_cv_file_results(cv_file)
 
     try:
         cv_content_bytes = await cv_file.read()
