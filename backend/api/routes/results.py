@@ -1,5 +1,6 @@
 import io
 from fastapi import APIRouter, UploadFile, File, Form, status, HTTPException, Depends
+from google.genai.errors import ServerError
 from loguru import logger
 from backend.api.models import ResultsAnalysis, ErrorResponse
 from backend.services.analysis_service import AnalysisService
@@ -67,6 +68,12 @@ async def analyze_results_endpoint(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(ve)
+        )
+    except ServerError as e:
+        logger.warning(f"Сервер Google перегружен: {e.message}. Попробуйте позже.")
+        raise HTTPException(
+            status_code=503,
+            detail="AI-модель временно перегружена. Пожалуйста, повторите попытку через несколько минут."
         )
     except Exception as e:
         logger.error(f"Произошла непредвиденная ошибка: {e}", exc_info=True)
