@@ -222,7 +222,7 @@ const InterviewPreparation: React.FC = () => {
     addTextBlock("Темы для технического интервью", report.conclusion.interview_topics);
     addTextBlock("Оценка соответствия ценностям", report.conclusion.values_assessment);
 
-    const fileName = `Отчет по кандидату - ${report.first_name || ''} ${report.last_name || ''}.pdf`;
+    const fileName = `Предварительная оценка кандидата - ${report.first_name || ''} ${report.last_name || ''}.pdf`;
     doc.save(fileName);
   };
 

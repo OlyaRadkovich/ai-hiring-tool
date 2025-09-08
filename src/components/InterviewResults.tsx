@@ -111,49 +111,59 @@ export default function InterviewResults() {
         doc.text(`Фидбек на кандидата ${report.candidate_info.full_name}`, 15, 15);
 
         const body = [
-          [{ content: `**AI-generated summary:** ${report.ai_summary}`, colSpan: 2, styles: { fontStyle: 'normal' } }],
-          [{ content: ' ', colSpan: 2, styles: { minCellHeight: 5 } }],
+          [{ content: 'AI-generated summary:', styles: { fontStyle: 'bold' } }],
+          [{ content: report.ai_summary, styles: { fontStyle: 'normal' } }],
+          [{ content: ' ', styles: { minCellHeight: 5 } }],
 
-          [{ content: '**1. Информация о кандидате**', colSpan: 2, styles: { fontSize: 12, fontStyle: 'bold' } }],
-          [{ content: '**1.1 Опыт**', colSpan: 2, styles: { fontStyle: 'bold' } }],
-          ['**● Количество лет опыта:**', report.candidate_info.experience_years],
-          ['**● Стеки технологий:**', report.candidate_info.tech_stack.join(', ')],
-          ['**● Проекты:**', report.candidate_info.projects.join(', ')],
-          ['**● Домены:**', report.candidate_info.domains.join(', ')],
-          ['**● Задачи, которые выполнял(а):**', report.candidate_info.tasks.join(', ')],
+          [{ content: '1. Информация о кандидате', styles: { fontSize: 12, fontStyle: 'bold' } }],
+          [{ content: '1.1 Опыт', styles: { fontStyle: 'bold' } }],
+          [{ content: 'Количество лет опыта:', styles: { fontStyle: 'bold' } }],
+          [{ content: report.candidate_info.experience_years, styles: { fontStyle: 'normal' } }],
+          [{ content: 'Стеки технологий:', styles: { fontStyle: 'bold' } }],
+          [{ content: report.candidate_info.tech_stack.join(', '), styles: { fontStyle: 'normal' } }],
+          [{ content: 'Проекты:', styles: { fontStyle: 'bold' } }],
+          [{ content: report.candidate_info.projects.join(', '), styles: { fontStyle: 'normal' } }],
+          [{ content: 'Домены:', styles: { fontStyle: 'bold' } }],
+          [{ content: report.candidate_info.domains.join(', '), styles: { fontStyle: 'normal' } }],
+          [{ content: 'Задачи, которые выполнял(а):', styles: { fontStyle: 'bold' } }],
+          [{ content: report.candidate_info.tasks.join(', '), styles: { fontStyle: 'normal' } }],
+          [{ content: '1.2 Технические знания', styles: { fontStyle: 'bold' } }],
+          [{ content: 'Темы, которые затрагивались на собеседовании:', styles: { fontStyle: 'bold' } }],
+          [{ content: report.interview_analysis.topics.join(', '), styles: { fontStyle: 'normal' } }],
+          [{ content: 'Тех задание:', styles: { fontStyle: 'bold' } }],
+          [{ content: report.interview_analysis.tech_assignment, styles: { fontStyle: 'normal' } }],
+          [{ content: 'Оценка знаний по этим темам:', styles: { fontStyle: 'bold' } }],
+          [{ content: report.interview_analysis.knowledge_assessment, styles: { fontStyle: 'normal' } }],
+          [{ content: '1.3 Коммуникационные навыки', styles: { fontStyle: 'bold' } }],
+          [{ content: 'Оценка коммуникационных навыков:', styles: { fontStyle: 'bold' } }],
+          [{ content: report.foreign_languages.assessment, styles: { fontStyle: 'normal' } }],
+          [{ content: ' ', styles: { minCellHeight: 5 } }],
+          [{ content: '1.4 Иностранные языки', styles: { fontStyle: 'bold' } }],
+          [{ content: 'Уровень владения иностранными языками:', styles: { fontStyle: 'bold' } }],
+          [{ content: report.foreign_languages.assessment, styles: { fontStyle: 'normal' } }],
+          [{ content: ' ', styles: { minCellHeight: 5 } }],
 
-          [{ content: '**1.2 Технические знания**', colSpan: 2, styles: { fontStyle: 'bold' } }],
-          ['**● Темы, которые затрагивались на собеседовании:**', report.interview_analysis.topics.join(', ')],
-          ['**● Тех задание:**', report.interview_analysis.tech_assignment],
-          ['**● Оценка знаний по этим темам:**', report.interview_analysis.knowledge_assessment],
+          [{ content: '2. Соответствие команде', styles: { fontSize: 12, fontStyle: 'bold' } }],
+          [{ content: 'Насколько кандидат соответствует ценностям и взглядам команды:', styles: { fontStyle: 'bold' } }],
+          [{ content: report.team_fit, styles: { fontStyle: 'normal' } }],
+          [{ content: ' ', styles: { minCellHeight: 5 } }],
 
-          [{ content: '**1.3 Коммуникационные навыки**', colSpan: 2, styles: { fontStyle: 'bold' } }],
-          ['**● Оценка коммуникационных навыков:**', report.communication_skills.assessment],
-
-          [{ content: '**1.4 Иностранные языки**', colSpan: 2, styles: { fontStyle: 'bold' } }],
-          ['**● Уровень владения иностранными языками:**', report.foreign_languages.assessment],
-          [{ content: ' ', colSpan: 2, styles: { minCellHeight: 5 } }],
-
-          [{ content: '**2. Соответствие команде**', colSpan: 2, styles: { fontSize: 12, fontStyle: 'bold' } }],
-          ['**● Насколько кандидат соответствует ценностям и взглядам команды:**', report.team_fit],
-          [{ content: ' ', colSpan: 2, styles: { minCellHeight: 5 } }],
-
-          [{ content: '**3. Дополнительная информация**', colSpan: 2, styles: { fontSize: 12, fontStyle: 'bold' } }],
+          [{ content: '3. Дополнительная информация', styles: { fontSize: 12, fontStyle: 'bold' } }],
           ...report.additional_information.length > 0
-            ? report.additional_information.map((info: string) => [{ content: `○ ${info}`, colSpan: 2, styles: { fontStyle: 'normal' } }])
-            : [[{ content: 'Нет.', colSpan: 2, styles: { fontStyle: 'normal' } }]],
-          [{ content: ' ', colSpan: 2, styles: { minCellHeight: 5 } }],
+            ? report.additional_information.map((info: string) => [{ content: `○ ${info}`, styles: { fontStyle: 'normal' } }])
+            : [[{ content: 'Нет.', styles: { fontStyle: 'normal' } }]],
+          [{ content: ' ', styles: { minCellHeight: 5 } }],
 
-          [{ content: '**4. Заключение**', colSpan: 2, styles: { fontSize: 12, fontStyle: 'bold' } }],
-          [{ content: `1. ${report.conclusion.recommendation}`, colSpan: 2, styles: { fontStyle: 'normal' } }],
-          [{ content: `2. По уровню знаний оцениваем его на уровень ${report.conclusion.assessed_level}`, colSpan: 2, styles: { fontStyle: 'normal' } }],
-          [{ content: `3. ${report.conclusion.summary}`, colSpan: 2, styles: { fontStyle: 'normal' } }],
-          [{ content: ' ', colSpan: 2, styles: { minCellHeight: 5 } }],
+          [{ content: '4. Заключение', styles: { fontSize: 12, fontStyle: 'bold' } }],
+          [{ content: `1. ${report.conclusion.recommendation}`, styles: { fontStyle: 'normal' } }],
+          [{ content: `2. По уровню знаний оцениваем его на уровень ${report.conclusion.assessed_level}`, styles: { fontStyle: 'normal' } }],
+          [{ content: `3. ${report.conclusion.summary}`, styles: { fontStyle: 'normal' } }],
+          [{ content: ' ', styles: { minCellHeight: 5 } }],
 
-          [{ content: '**5. Рекомендации для кандидата**', colSpan: 2, styles: { fontSize: 12, fontStyle: 'bold' } }],
+          [{ content: '5. Рекомендации для кандидата', styles: { fontSize: 12, fontStyle: 'bold' } }],
           ...report.recommendations_for_candidate.length > 0
-            ? report.recommendations_for_candidate.map((rec: string) => [{ content: `● ${rec}`, colSpan: 2, styles: { fontStyle: 'normal' } }])
-            : [[{ content: 'Рекомендации не сгенерированы.', colSpan: 2, styles: { fontStyle: 'normal' } }]],
+            ? report.recommendations_for_candidate.map((rec: string) => [{ content: `● ${rec}`, styles: { fontStyle: 'normal' } }])
+            : [[{ content: 'Рекомендации не сгенерированы.', styles: { fontStyle: 'normal' } }]],
         ];
 
         autoTable(doc, {
@@ -163,21 +173,12 @@ export default function InterviewResults() {
             styles: {
                 font: 'Roboto',
                 fontSize: 10,
-                cellPadding: { top: 0, right: 0, bottom: 1, left: 0 },
-            },
-            columnStyles: {
-                0: { fontStyle: 'bold', cellWidth: 70 }, // Первая колонка жирная
-                1: { fontStyle: 'normal' }, // Вторая колонка обычная
-            },
-            didParseCell: (data) => {
-                if (typeof data.cell.text[0] === 'string') {
-                    data.cell.text = data.cell.text[0].replace(/\*\*/g, '');
-                }
+                cellPadding: { top: 1, right: 0, bottom: 1, left: 0 },
             }
         });
 
         const fullName = report.candidate_info.full_name.replace(/\s+/g, '_');
-        doc.save(`Interview_Report_${fullName}.pdf`);
+        doc.save(`Фидбек на кандидата ${fullName}.pdf`);
 
     } catch (error) {
       console.error("Ошибка при создании PDF:", error);
