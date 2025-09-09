@@ -19,6 +19,8 @@ from google.adk.sessions import InMemorySessionService
 from google.genai import types
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
+import httplib2
+from google_auth_httplib2 import AuthorizedHttp
 
 
 class AnalysisService:
@@ -35,13 +37,22 @@ class AnalysisService:
         try:
             credentials_path = settings.google_application_credentials
             if os.path.exists(credentials_path):
-                credentials = service_account.Credentials.from_service_account_file(credentials_path)
-                self.drive_service = build('drive', 'v3', credentials=credentials)
+                creds = service_account.Credentials.from_service_account_file(credentials_path)
+                scoped_credentials = creds.with_scopes(['https://www.googleapis.com/auth/drive'])
+                http_client_with_timeout = httplib2.Http(timeout=600)
+                authed_http = AuthorizedHttp(scoped_credentials, http=http_client_with_timeout)
+                self.drive_service = build(
+                    'drive',
+                    'v3',
+                    http=authed_http,
+                    cache_discovery=False
+                )
+
                 logger.success("Клиент Google Drive API успешно инициализирован.")
             else:
                 logger.error(f"Файл учетных данных Google не найден по пути: {credentials_path}")
         except Exception as e:
-            logger.error(f"Ошибка инициализации клиента Google Drive API: {e}")
+            logger.error(f"Ошибка инициализации клиента Google Drive API: {e}", exc_info=True)
 
     def _set_google_api_key(self):
         """
@@ -136,30 +147,25 @@ class AnalysisService:
         logger.info("🚀 Запуск Пайплайна 2: Анализ результатов интервью...")
         self._set_google_api_key()
 
+        logger.info("Загрузка текстовых артефактов из Google Drive...")
+        cv_text = fp.read_file_content(cv_file, cv_filename)
+
+        drive_download_tasks = [
+            fp.download_sheet_from_drive(self.drive_service, fp.get_google_drive_file_id(competency_matrix_link)),
+            fp.download_sheet_from_drive(self.drive_service, fp.get_google_drive_file_id(department_values_link)),
+            fp.download_sheet_from_drive(self.drive_service, fp.get_google_drive_file_id(employee_portrait_link)),
+            fp.download_sheet_from_drive(self.drive_service, fp.get_google_drive_file_id(job_requirements_link)),
+        ]
+        (matrix_text, values_text, portrait_text, requirements_text) = await asyncio.gather(*drive_download_tasks)
+        logger.success("Все текстовые артефакты успешно загружены.")
+
+        logger.info("Загрузка и транскрипция видео...")
         video_file_id = fp.get_google_drive_file_id(video_link)
-
-        async def transcribe_and_read():
-            audio_stream = await fp.download_audio_from_drive(self.drive_service, video_file_id)
-            transcription = await fp.transcribe_audio_assemblyai(audio_stream)
-            if not transcription:
-                raise ValueError("Транскрипция не вернула текст. Видео может быть без звука или слишком коротким.")
-            cv_text = fp.read_file_content(cv_file, cv_filename)
-            return transcription, cv_text
-
-        async def download_drive_data():
-            tasks = [
-                fp.download_sheet_from_drive(self.drive_service, fp.get_google_drive_file_id(competency_matrix_link)),
-                fp.download_sheet_from_drive(self.drive_service, fp.get_google_drive_file_id(department_values_link)),
-                fp.download_sheet_from_drive(self.drive_service, fp.get_google_drive_file_id(employee_portrait_link)),
-                fp.download_sheet_from_drive(self.drive_service, fp.get_google_drive_file_id(job_requirements_link)),
-            ]
-            return await asyncio.gather(*tasks)
-
-        (transcription_text, cv_text), (matrix_text, values_text, portrait_text,
-                                        requirements_text) = await asyncio.gather(
-            transcribe_and_read(),
-            download_drive_data()
-        )
+        audio_stream = await fp.download_audio_from_drive(self.drive_service, video_file_id)
+        transcription_text = await fp.transcribe_audio_assemblyai(audio_stream)
+        if not transcription_text:
+            raise ValueError("Транскрипция не вернула текст. Видео может быть без звука или слишком коротким.")
+        logger.success("Видео успешно обработано.")
 
         session_service = InMemorySessionService()
         session_id = f"results_session_{os.urandom(8).hex()}"
