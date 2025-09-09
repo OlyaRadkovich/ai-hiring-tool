@@ -35,10 +35,10 @@ export default function InterviewResults() {
 
   const [cvFile, setCvFile] = useState<File | null>(null);
   const [videoLink, setVideoLink] = useState("");
-  const [competencyMatrixLink, setCompetencyMatrixLink] = useState("https://docs.google.com/spreadsheets/d/1TkBmT4XQ-nQrdJ2ALGLwXb99wlcFIPwhgah3ZTafOwE/edit?usp=drive_link");
-  const [departmentValuesLink, setDepartmentValuesLink] = useState("https://docs.google.com/spreadsheets/d/1MEQq1yqlWINXuA3-zc9dVhUeuBysSmf7D_w9goPNhLg/edit?usp=drive_link");
-  const [employeePortraitLink, setEmployeePortraitLink] = useState("https://docs.google.com/spreadsheets/d/1dtP5BHysvSffMt8OrXaVo5a1jcuO4o-yq3h_ITAImIk/edit?usp=drive_link");
-  const [jobRequirementsLink, setJobRequirementsLink] = useState("https://docs.google.com/spreadsheets/d/1w-DpZkCCBt2C0XBhXrdt9rgZ9WeNI6V15Iv55E5QBcw/edit?usp=drive_link");
+  const [competencyMatrixLink, setCompetencyMatrixLink] = useState("https://docs.google.com/spreadsheets/d/1VzwMPfgBn6xB0xKnJ-DD-0bkBQDOvbjihwuT6FKo8qY/edit?usp=drive_link");
+  const [departmentValuesLink, setDepartmentValuesLink] = useState("https://docs.google.com/spreadsheets/d/1KX1ihfOTm7OGEI942cEii4dj9T8VvtmUhisE49WYAUo/edit?usp=drive_link");
+  const [employeePortraitLink, setEmployeePortraitLink] = useState("https://docs.google.com/spreadsheets/d/1hIksOP9zcBy5fFZ12SyA_lc6xsL0EXHPC2Y86YykVPI/edit?usp=drive_link");
+  const [jobRequirementsLink, setJobRequirementsLink] = useState("https://docs.google.com/spreadsheets/d/1JOYzYmAtaPzHHuN2CvdrCXn_L30bBNlikJ5K0mRt-HE/edit?usp=drive_link");
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [analysisResults, setAnalysisResults] = useState<any>(null);

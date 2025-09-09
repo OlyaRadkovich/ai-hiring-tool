@@ -58,7 +58,7 @@ const StatusIcon = ({ status }: { status: string }) => {
 const InterviewPreparation: React.FC = () => {
   const [cvFile, setCvFile] = useState<File | null>(null);
   const [feedbackText, setFeedbackText] = useState('');
-  const [requirementsLink, setRequirementsLink] = useState('https://docs.google.com/spreadsheets/d/1rtLBPqaJGkcZzUWDX01P5VI01bBGQ1B8H5g_S8PhXL0/edit?usp=sharing');
+  const [requirementsLink, setRequirementsLink] = useState('https://docs.google.com/spreadsheets/d/1JOYzYmAtaPzHHuN2CvdrCXn_L30bBNlikJ5K0mRt-HE/edit?usp=drive_link');
   const [isLoading, setIsLoading] = useState(false);
   const [analysisResponse, setAnalysisResponse] = useState<AnalysisResponse | null>(null);
 
