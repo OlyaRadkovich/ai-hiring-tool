@@ -19,6 +19,7 @@ dist-ssr
 __pycache__/
 *.pyc
 .env
+.env.local
 
 # Editor directories and files
 .vscode/*
@@ -30,3 +31,4 @@ __pycache__/
 *.njsproj
 *.sln
 *.sw?
+gcp-credentials.json

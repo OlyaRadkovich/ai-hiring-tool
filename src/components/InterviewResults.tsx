@@ -136,7 +136,7 @@ export default function InterviewResults() {
           [{ content: report.interview_analysis.knowledge_assessment, styles: { fontStyle: 'normal' } }],
           [{ content: '1.3 Коммуникационные навыки', styles: { fontStyle: 'bold' } }],
           [{ content: 'Оценка коммуникационных навыков:', styles: { fontStyle: 'bold' } }],
-          [{ content: report.foreign_languages.assessment, styles: { fontStyle: 'normal' } }],
+          [{ content: report.communication_skills.assessment, styles: { fontStyle: 'normal' } }],
           [{ content: ' ', styles: { minCellHeight: 5 } }],
           [{ content: '1.4 Иностранные языки', styles: { fontStyle: 'bold' } }],
           [{ content: 'Уровень владения иностранными языками:', styles: { fontStyle: 'bold' } }],
