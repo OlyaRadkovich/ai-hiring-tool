@@ -2,7 +2,7 @@ from google.adk.agents import Agent
 
 agent_1_data_parser = Agent(
     name="candidate_data_parser",
-    model="gemini-2.0-flash-exp",
+    model="gemini-1.5-flash-latest",
     description="Агент для извлечения и структурирования ключевой информации из резюме, требований к вакансии"
                 " и фидбэка рекрутера.",
     instruction="""
