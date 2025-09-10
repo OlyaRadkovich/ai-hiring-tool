@@ -1,7 +1,6 @@
 import os
 import json
 import io
-import asyncio
 from loguru import logger
 
 from backend.api.models import PreparationAnalysis, ResultsAnalysis, FullReport
@@ -147,26 +146,34 @@ class AnalysisService:
         logger.info("🚀 Запуск Пайплайна 2: Анализ результатов интервью...")
         self._set_google_api_key()
 
-        logger.info("Загрузка текстовых артефактов из Google Drive...")
-        cv_text = fp.read_file_content(cv_file, cv_filename)
-
-        drive_download_tasks = [
-            fp.download_sheet_from_drive(self.drive_service, fp.get_google_drive_file_id(competency_matrix_link)),
-            fp.download_sheet_from_drive(self.drive_service, fp.get_google_drive_file_id(department_values_link)),
-            fp.download_sheet_from_drive(self.drive_service, fp.get_google_drive_file_id(employee_portrait_link)),
-            fp.download_sheet_from_drive(self.drive_service, fp.get_google_drive_file_id(job_requirements_link)),
-        ]
-        (matrix_text, values_text, portrait_text, requirements_text) = await asyncio.gather(*drive_download_tasks)
-        logger.success("Все текстовые артефакты успешно загружены.")
-
-        logger.info("Загрузка и транскрипция видео...")
+        logger.info("Загрузка и транскрипция аудио...")
         video_file_id = fp.get_google_drive_file_id(video_link)
         audio_stream = await fp.download_audio_from_drive(self.drive_service, video_file_id)
         transcription_text = await fp.transcribe_audio_assemblyai(audio_stream)
         if not transcription_text:
             raise ValueError("Транскрипция не вернула текст. Видео может быть без звука или слишком коротким.")
-        logger.success("Видео успешно обработано.")
 
+        cv_text = fp.read_file_content(cv_file, cv_filename)
+
+        logger.info("Загрузка текстовых артефактов из Google Drive...")
+        links = {
+            "matrix": competency_matrix_link,
+            "values": department_values_link,
+            "portrait": employee_portrait_link,
+            "requirements": job_requirements_link,
+        }
+
+        drive_data = {}
+        for key, link in links.items():
+            file_id = fp.get_google_drive_file_id(link)
+            logger.info(f"Загрузка таблицы '{key}' с ID: {file_id}...")
+            data = await fp.download_sheet_from_drive(self.drive_service, file_id)
+            drive_data[key] = data
+
+        matrix_text = drive_data["matrix"]
+        values_text = drive_data["values"]
+        portrait_text = drive_data["portrait"]
+        requirements_text = drive_data["requirements"]
         session_service = InMemorySessionService()
         session_id = f"results_session_{os.urandom(8).hex()}"
         user_id = "results_user"
@@ -181,6 +188,7 @@ class AnalysisService:
                 agent_4_output += "".join(part.text for part in event.content.parts if part.text)
 
         combined_input_for_agent_5 = (
+            f"### Список тем/вопросов интервью:\n{agent_4_output}\n\n"
             f"### Транскрипция интервью:\n{transcription_text}\n\n"
             f"### CV кандидата:\n{cv_text}\n\n"
             f"### Требования к вакансии:\n{requirements_text}\n\n"
@@ -200,11 +208,26 @@ class AnalysisService:
 
         logger.info("Парсинг финального JSON ответа от агента...")
         try:
-            clean_json_str_4 = agent_4_output.strip().replace("```json", "").replace("```", "").strip()
+            start_index_4 = agent_4_output.find('{')
+            end_index_4 = agent_4_output.rfind('}')
+            if start_index_4 != -1 and end_index_4 != -1:
+                clean_json_str_4 = agent_4_output[start_index_4:end_index_4 + 1]
+            else:
+                clean_json_str_4 = agent_4_output
+
             topics_data = json.loads(clean_json_str_4)
 
-            clean_json_str_5 = agent_5_output.strip().replace("```json", "").replace("```", "").strip()
+            start_index_5 = agent_5_output.find('{')
+            end_index_5 = agent_5_output.rfind('}')
+            if start_index_5 != -1 and end_index_5 != -1:
+                clean_json_str_5 = agent_5_output[start_index_5:end_index_5 + 1]
+            else:
+                clean_json_str_5 = agent_5_output
+
             report_data = json.loads(clean_json_str_5)
+
+            if "topics" in topics_data and "interview_analysis" in report_data:
+                report_data["interview_analysis"]["topics"] = topics_data["topics"]
 
             full_report = FullReport(**report_data)
 
