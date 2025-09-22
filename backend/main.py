@@ -13,6 +13,7 @@ app = FastAPI(
 )
 
 origins = [
+    "https://ai-hiring-tool-frontend-1053066596162.europe-west1.run.app",
     "http://localhost:8080",
     "http://127.0.0.1:8080",
 ]

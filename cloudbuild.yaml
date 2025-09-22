@@ -33,6 +33,8 @@ steps:
     id: 'Build Frontend Image'
     args:
       - 'build'
+      - '--build-arg'
+      - 'VITE_API_URL=https://ai-hiring-tool-backend-1053066596162.europe-west1.run.app'
       - '-t'
       - 'europe-west1-docker.pkg.dev/$PROJECT_ID/ai-hiring-repo/ai-hiring-tool-frontend:$COMMIT_SHA'
       - '.'
