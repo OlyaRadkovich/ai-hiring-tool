@@ -33,6 +33,8 @@ class AnalysisService:
             logger.warning("API ключ для AssemblyAI не настроен в .env файле!")
 
         self.drive_service = None
+        self.request_counter = 0
+        self.session_total_tokens = 0
         try:
             credentials_path = settings.google_application_credentials
             if os.path.exists(credentials_path):
@@ -72,6 +74,7 @@ class AnalysisService:
             requirements_link: str
     ) -> PreparationAnalysis:
         logger.info("Начало процесса оценки кандидата (Пайплайн 1)...")
+        pipeline_tokens_used = 0
 
         self._set_google_api_key()
 
@@ -97,6 +100,9 @@ class AnalysisService:
         )
         agent_1_output = ""
         async for event in runner_1.run_async(session_id=session_id, user_id=user_id, new_message=message_for_agent_1):
+            if event.usage_metadata:
+                pipeline_tokens_used += event.usage_metadata.total_token_count
+                logger.info(f"Токены (Агент 1): Вход={event.usage_metadata.prompt_token_count}, Выход={event.usage_metadata.candidates_token_count}, Всего={event.usage_metadata.total_token_count}")
             if event.content and event.content.parts:
                 agent_1_output += "".join(part.text for part in event.content.parts if part.text)
 
@@ -105,6 +111,9 @@ class AnalysisService:
         message_for_agent_2 = types.Content(role="user", parts=[types.Part(text=agent_1_output)])
         agent_2_output = ""
         async for event in runner_2.run_async(session_id=session_id, user_id=user_id, new_message=message_for_agent_2):
+            if event.usage_metadata:
+                pipeline_tokens_used += event.usage_metadata.total_token_count
+                logger.info(f"Токены (Агент 2): Вход={event.usage_metadata.prompt_token_count}, Выход={event.usage_metadata.candidates_token_count}, Всего={event.usage_metadata.total_token_count}")
             if event.content and event.content.parts:
                 agent_2_output += "".join(part.text for part in event.content.parts if part.text)
 
@@ -113,8 +122,15 @@ class AnalysisService:
         message_for_agent_3 = types.Content(role="user", parts=[types.Part(text=agent_2_output)])
         final_output = ""
         async for event in runner_3.run_async(session_id=session_id, user_id=user_id, new_message=message_for_agent_3):
+            if event.usage_metadata:
+                pipeline_tokens_used += event.usage_metadata.total_token_count
+                logger.info(f"Токены (Агент 3): Вход={event.usage_metadata.prompt_token_count}, Выход={event.usage_metadata.candidates_token_count}, Всего={event.usage_metadata.total_token_count}")
             if event.content and event.content.parts:
                 final_output += "".join(part.text for part in event.content.parts if part.text)
+
+        self.session_total_tokens += pipeline_tokens_used
+        logger.info(f"Всего токенов за Пайплайн 1: {pipeline_tokens_used}")
+        logger.info(f"Общий расход токенов за сессию: {self.session_total_tokens}")
 
         logger.info("Парсинг финального вывода...")
         try:
@@ -144,6 +160,8 @@ class AnalysisService:
             job_requirements_link: str
     ) -> ResultsAnalysis:
         logger.info("🚀 Запуск Пайплайна 2: Анализ результатов интервью...")
+        pipeline_tokens_used = 0
+
         self._set_google_api_key()
 
         logger.info("Загрузка и транскрипция аудио...")
@@ -184,6 +202,9 @@ class AnalysisService:
         message_for_agent_4 = types.Content(role="user", parts=[types.Part(text=transcription_text)])
         agent_4_output = ""
         async for event in runner_4.run_async(session_id=session_id, user_id=user_id, new_message=message_for_agent_4):
+            if event.usage_metadata:
+                pipeline_tokens_used += event.usage_metadata.total_token_count
+                logger.info(f"Токены (Агент 4): Вход={event.usage_metadata.prompt_token_count}, Выход={event.usage_metadata.candidates_token_count}, Всего={event.usage_metadata.total_token_count}")
             if event.content and event.content.parts:
                 agent_4_output += "".join(part.text for part in event.content.parts if part.text)
 
@@ -203,8 +224,15 @@ class AnalysisService:
         message_for_agent_5 = types.Content(role="user", parts=[types.Part(text=combined_input_for_agent_5)])
         agent_5_output = ""
         async for event in runner_5.run_async(session_id=session_id, user_id=user_id, new_message=message_for_agent_5):
+            if event.usage_metadata:
+                pipeline_tokens_used += event.usage_metadata.total_token_count
+                logger.info(f"Токены (Агент 5): Вход={event.usage_metadata.prompt_token_count}, Выход={event.usage_metadata.candidates_token_count}, Всего={event.usage_metadata.total_token_count}")
             if event.content and event.content.parts:
                 agent_5_output += "".join(part.text for part in event.content.parts if part.text)
+
+        self.session_total_tokens += pipeline_tokens_used
+        logger.info(f"Всего токенов за Пайплайн 2: {pipeline_tokens_used}")
+        logger.info(f"Общий расход токенов за сессию: {self.session_total_tokens}")
 
         logger.info("Парсинг финального JSON ответа от агента...")
         try:
