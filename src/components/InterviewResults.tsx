@@ -59,6 +59,9 @@ export default function InterviewResults() {
 
     setIsProcessing(true);
     setAnalysisResults(null);
+    const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+    const endpoint = `${API_BASE_URL}/api/results/`;
+
     try {
       const form = new FormData();
       form.append("cv_file", cvFile);
@@ -68,7 +71,7 @@ export default function InterviewResults() {
       form.append("employee_portrait_link", employeePortraitLink);
       form.append("job_requirements_link", jobRequirementsLink);
 
-      const res = await fetch("/api/results/", { method: "POST", body: form });
+      const res = await fetch(endpoint, { method: "POST", body: form });
 
       if (!res.ok) {
         const errorData = await res.json();
