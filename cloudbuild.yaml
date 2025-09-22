@@ -20,7 +20,7 @@ steps:
     args:
       - 'run'
       - 'deploy'
-      - 'ai-hiring-tool-backend' # Имя сервиса в Cloud Run
+      - 'ai-hiring-tool-backend'
       - '--image=europe-west1-docker.pkg.dev/$PROJECT_ID/ai-hiring-repo/ai-hiring-tool-backend:$COMMIT_SHA'
       - '--region=europe-west1'
       - '--platform=managed'
@@ -59,3 +59,6 @@ steps:
 images:
   - 'europe-west1-docker.pkg.dev/$PROJECT_ID/ai-hiring-repo/ai-hiring-tool-backend:$COMMIT_SHA'
   - 'europe-west1-docker.pkg.dev/$PROJECT_ID/ai-hiring-repo/ai-hiring-tool-frontend:$COMMIT_SHA'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
