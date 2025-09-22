@@ -55,7 +55,7 @@ steps:
       - '--region=europe-west1'
       - '--service-account=ai-hiring-tool@qa-assistant-452611.iam.gserviceaccount.com'
       - '--platform=managed'
-      - '--port=8080'
+      - '--port=80'
       - '--allow-unauthenticated'
 
 images:
