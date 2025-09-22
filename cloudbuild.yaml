@@ -37,7 +37,7 @@ steps:
       - 'europe-west1-docker.pkg.dev/$PROJECT_ID/ai-hiring-repo/ai-hiring-tool-frontend:$COMMIT_SHA'
       - '.'
       - '-f'
-      - 'Dockerfile'
+      - 'Prod.dockerfile'
 
   - name: 'gcr.io/cloud-builders/docker'
     id: 'Push Frontend Image'
@@ -57,9 +57,6 @@ steps:
       - '--platform=managed'
       - '--port=80'
       - '--allow-unauthenticated'
-      - '--cpu=1'
-      - '--memory=512Mi'
-      - '--cpu-boost'
 
 images:
   - 'europe-west1-docker.pkg.dev/$PROJECT_ID/ai-hiring-repo/ai-hiring-tool-backend:$COMMIT_SHA'
