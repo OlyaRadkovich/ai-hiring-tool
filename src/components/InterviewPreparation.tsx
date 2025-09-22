@@ -84,8 +84,11 @@ const InterviewPreparation: React.FC = () => {
     formData.append('feedback_text', feedbackText);
     formData.append('requirements_link', requirementsLink);
 
+    const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+    const endpoint = `${API_BASE_URL}/api/prep/`;
+
     try {
-      const response = await fetch('http://localhost:8000/api/prep/', { method: 'POST', body: formData });
+      const response = await fetch(endpoint, { method: 'POST', body: formData });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ detail: `Ошибка сервера: ${response.status}` }));
         throw new Error(errorData.detail);
