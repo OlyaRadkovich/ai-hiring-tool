@@ -44,9 +44,6 @@ steps:
     args:
       - 'push'
       - 'europe-west1-docker.pkg.dev/$PROJECT_ID/ai-hiring-repo/ai-hiring-tool-frontend:$COMMIT_SHA'
-      - '.'
-      - '-f'
-      - 'Prod.dockerfile'
 
   - name: 'gcr.io/cloud-builders/gcloud'
     id: 'Deploy Frontend'
