@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -44,10 +44,31 @@ export default function InterviewResults() {
   const [analysisResults, setAnalysisResults] = useState<any>(null);
   const [isExporting, setIsExporting] = useState(false);
 
-  const handleFileChange = (setter: React.Dispatch<React.SetStateAction<File | null>>) => (event: React.ChangeEvent<HTMLInputElement>) => {
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      setter(file);
+      setCvFile(file);
+    }
+  };
+
+  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDragging(false);
+    const file = event.dataTransfer.files?.[0];
+    if (file && (file.type === "application/pdf" || file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || file.type === "text/plain")) {
+      setCvFile(file);
     }
   };
 
@@ -59,9 +80,6 @@ export default function InterviewResults() {
 
     setIsProcessing(true);
     setAnalysisResults(null);
-    const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-    const endpoint = `${API_BASE_URL}/api/results/`;
-
     try {
       const form = new FormData();
       form.append("cv_file", cvFile);
@@ -71,7 +89,7 @@ export default function InterviewResults() {
       form.append("employee_portrait_link", employeePortraitLink);
       form.append("job_requirements_link", jobRequirementsLink);
 
-      const res = await fetch(endpoint, { method: "POST", body: form });
+      const res = await fetch("/api/results/", { method: "POST", body: form });
 
       if (!res.ok) {
         const errorData = await res.json();
@@ -198,14 +216,23 @@ export default function InterviewResults() {
         <Card className="shadow-card">
           <CardHeader>
             <CardTitle className="flex items-center space-x-2"><BookUser className="w-5 h-5 text-primary" /><span>CV Кандидата</span></CardTitle>
-            <CardDescription>Загрузите резюме в формате .txt, .pdf или .docx</CardDescription>
+            <CardDescription>Перетащите файл или нажмите на область для загрузки .txt, .pdf, .docx</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="border-2 border-dashed border-border rounded-lg p-6 text-center hover:border-primary/50 transition-colors">
-              <input type="file" id="cv-upload" accept=".pdf,.docx, .txt" onChange={handleFileChange(setCvFile)} className="hidden" />
+            <div
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+                isDragging
+                  ? 'border-primary bg-primary/10'
+                  : 'border-border hover:border-primary/50'
+              }`}
+            >
+              <input type="file" id="cv-upload" accept=".pdf,.docx, .txt" onChange={handleFileChange} className="hidden" />
               <label htmlFor="cv-upload" className="cursor-pointer">
                 <Upload className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-                <p className="text-sm text-muted-foreground mb-2">{cvFile ? cvFile.name : "Нажмите для загрузки CV"}</p>
+                <p className="text-sm text-muted-foreground mb-2">{cvFile ? cvFile.name : "Нажмите или перетащите файл для загрузки"}</p>
               </label>
             </div>
             {cvFile && <Badge variant="secondary" className="mt-3">✓ {cvFile.name} загружен</Badge>}
@@ -215,7 +242,8 @@ export default function InterviewResults() {
         <Card className="shadow-card">
           <CardHeader>
             <CardTitle className="flex items-center space-x-2"><Video className="w-5 h-5 text-primary" /><span>Видеозапись собеседования</span></CardTitle>
-            <CardDescription>Перед добавлением ссылки убедитесь, что видео находится в папке, к которой у сервиса ai-hiring-tool-service@ai-hiring-tool.iam.gserviceaccount.com есть доступ уровня Contributor/Editor.</CardDescription>
+            <CardDescription>Файл с видеозаписью должен находиться в папке InterviewsRecords.</CardDescription>
+            <CardDescription>Путь: QA Common / QAHiringToInnowise / InterviewsRecords.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <Label htmlFor="video-link">Ссылка на видео</Label>
