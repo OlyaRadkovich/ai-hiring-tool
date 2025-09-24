@@ -79,7 +79,7 @@ export default function InterviewResults() {
     }
 
     const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-    const endpoint = `${API_BASE_URL}/api/prep/`;
+    const endpoint = `${API_BASE_URL}/api/results/`;
 
     setIsProcessing(true);
     setAnalysisResults(null);
