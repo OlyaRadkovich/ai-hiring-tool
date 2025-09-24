@@ -1,14 +1,28 @@
-import React, { useState } from 'react';
-import { Button } from './ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from './ui/card';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
-import { Textarea } from './ui/textarea';
-import { Table, TableBody, TableCell, TableHeader, TableHead, TableRow } from './ui/table';
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import { toast } from './ui/use-toast';
-import { Loader2 } from 'lucide-react';
+import React, { useState } from "react";
+import { Button } from "./ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "./ui/card";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
+import { Textarea } from "./ui/textarea";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHeader,
+  TableHead,
+  TableRow,
+} from "./ui/table";
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
+import { toast } from "./ui/use-toast";
+import { Brain } from "lucide-react";
+import { Progress } from "./ui/progress";
 
 interface MatchingItem {
   criterion: string;
@@ -33,83 +47,130 @@ interface AnalysisResponse {
   success: boolean;
   report: Report;
 }
+
+interface InterviewPreparationProps {
+  cachedData: AnalysisResponse | undefined;
+  updateCache: (data: AnalysisResponse | undefined) => void;
+  isLoading: boolean;
+  setIsLoading: (status: boolean) => void;
+}
+
 const icons = {
   full: {
     svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m9 12 2 2 4-4"/></svg>`,
-    color: '#22c55e',
+    color: "#22c55e",
   },
   partial: {
     svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" x2="12" y1="9" y2="13"></line><line x1="12" x2="12.01" y1="17" y2="17"></line></svg>`,
-    color: '#f59e0b',
+    color: "#f59e0b",
   },
   none: {
     svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" x2="9" y1="9" y2="15"></line><line x1="9" x2="15" y1="9" y2="15"></line></svg>`,
-    color: '#ef4444',
+    color: "#ef4444",
   },
 };
 const StatusIcon = ({ status }: { status: string }) => {
   const iconKey = status.toLowerCase() as keyof typeof icons;
   const icon = icons[iconKey];
   if (!icon) return <span>{status}</span>;
-  return <div className="w-6 h-6 mx-auto" dangerouslySetInnerHTML={{ __html: icon.svg }} />;
+  return (
+    <div
+      className="w-6 h-6 mx-auto"
+      dangerouslySetInnerHTML={{ __html: icon.svg }}
+    />
+  );
 };
 
-
-const InterviewPreparation: React.FC = () => {
+const InterviewPreparation: React.FC<InterviewPreparationProps> = ({
+  cachedData,
+  updateCache,
+  isLoading,
+  setIsLoading,
+}) => {
   const [cvFile, setCvFile] = useState<File | null>(null);
-  const [feedbackText, setFeedbackText] = useState('');
-  const [requirementsLink, setRequirementsLink] = useState('https://docs.google.com/spreadsheets/d/1JOYzYmAtaPzHHuN2CvdrCXn_L30bBNlikJ5K0mRt-HE/edit?usp=drive_link');
-  const [isLoading, setIsLoading] = useState(false);
-  const [analysisResponse, setAnalysisResponse] = useState<AnalysisResponse | null>(null);
+  const [feedbackText, setFeedbackText] = useState("");
+  const [requirementsLink, setRequirementsLink] = useState(
+    "https://docs.google.com/spreadsheets/d/1JOYzYmAtaPzHHuN2CvdrCXn_L30bBNlikJ5K0mRt-HE/edit?usp=drive_link"
+  );
 
   const handleCvFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) setCvFile(event.target.files[0]);
   };
 
   const handleSubmit = async () => {
-    setAnalysisResponse(null);
-    if (requirementsLink.trim() === '') {
-      toast({ title: "Ошибка", description: "Пожалуйста, укажите ссылку на требования к кандидату.", variant: "destructive" });
+    updateCache(undefined);
+    if (requirementsLink.trim() === "") {
+      toast({
+        title: "Ошибка",
+        description: "Пожалуйста, укажите ссылку на требования к кандидату.",
+        variant: "destructive",
+      });
       return;
     }
-    if (!cvFile || feedbackText.trim() === '') {
-      toast({ title: "Ошибка", description: "Пожалуйста, загрузите резюме и введите фидбэк от рекрутера.", variant: "destructive" });
+    if (!cvFile || feedbackText.trim() === "") {
+      toast({
+        title: "Ошибка",
+        description:
+          "Пожалуйста, загрузите резюме и введите фидбэк от рекрутера.",
+        variant: "destructive",
+      });
       return;
     }
 
     setIsLoading(true);
 
     const formData = new FormData();
-    if(cvFile) formData.append('cv_file', cvFile);
-    formData.append('feedback_text', feedbackText);
-    formData.append('requirements_link', requirementsLink);
+    if (cvFile) formData.append("cv_file", cvFile);
+    formData.append("feedback_text", feedbackText);
+    formData.append("requirements_link", requirementsLink);
+
+    const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+    const endpoint = `${API_BASE_URL}/api/prep/`;
 
     try {
-      const response = await fetch('http://localhost:8000/api/prep/', { method: 'POST', body: formData });
+      const response = await fetch(endpoint, {
+        method: "POST",
+        body: formData,
+      });
+
+      const rawResponseText = await response.text();
+
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ detail: `Ошибка сервера: ${response.status}` }));
-        throw new Error(errorData.detail);
+        try {
+          const errorData = JSON.parse(rawResponseText);
+          throw new Error(errorData.detail || "Analyze failed");
+        } catch {
+          throw new Error(
+            rawResponseText || `Server returned status ${response.status}`
+          );
+        }
       }
-      const data = await response.json();
-      setAnalysisResponse(data);
+
+      const data = JSON.parse(rawResponseText);
+      updateCache(data);
       toast({ title: "Успех", description: "Анализ успешно завершен." });
     } catch (error: any) {
-      toast({ title: "Ошибка анализа", description: error.message, variant: "destructive" });
+      console.error("Сырой ответ от сервера (Raw response):", error);
+      toast({
+        title: "Ошибка анализа",
+        description: error.message,
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleExportPdf = async () => {
-    if (!analysisResponse?.report) {
+    if (!cachedData?.report) {
       alert("Нет данных для генерации отчета.");
       return;
     }
-    const { report } = analysisResponse;
+    const { report } = cachedData;
     const doc = new jsPDF();
 
     try {
-      const fontResponse = await fetch('/fonts/Roboto-Regular.ttf');
+      const fontResponse = await fetch("/fonts/Roboto-Regular.ttf");
       const fontBlob = await fontResponse.blob();
       const fontData = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -117,11 +178,11 @@ const InterviewPreparation: React.FC = () => {
         reader.onerror = reject;
         reader.readAsDataURL(fontBlob);
       });
-      const fontBase64 = fontData.split(',')[1];
-      doc.addFileToVFS('Roboto-Regular.ttf', fontBase64);
-      doc.addFont('Roboto-Regular.ttf', 'Roboto', 'normal');
+      const fontBase64 = fontData.split(",")[1];
+      doc.addFileToVFS("Roboto-Regular.ttf", fontBase64);
+      doc.addFont("Roboto-Regular.ttf", "Roboto", "normal");
 
-      const fontBoldResponse = await fetch('/fonts/Roboto-Bold.ttf');
+      const fontBoldResponse = await fetch("/fonts/Roboto-Bold.ttf");
       const fontBoldBlob = await fontBoldResponse.blob();
       const fontBoldData = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -129,17 +190,17 @@ const InterviewPreparation: React.FC = () => {
         reader.onerror = reject;
         reader.readAsDataURL(fontBoldBlob);
       });
-      const fontBoldBase64 = fontBoldData.split(',')[1];
-      doc.addFileToVFS('Roboto-Bold.ttf', fontBoldBase64);
-      doc.addFont('Roboto-Bold.ttf', 'Roboto', 'bold');
+      const fontBoldBase64 = fontBoldData.split(",")[1];
+      doc.addFileToVFS("Roboto-Bold.ttf", fontBoldBase64);
+      doc.addFont("Roboto-Bold.ttf", "Roboto", "bold");
     } catch (error) {
-        console.error("Не удалось загрузить шрифты.", error);
+      console.error("Не удалось загрузить шрифты.", error);
     }
 
     const svgToPng = (svg: string, size: number): Promise<string> => {
       return new Promise((resolve) => {
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
         const img = new Image();
 
         canvas.width = size;
@@ -147,54 +208,68 @@ const InterviewPreparation: React.FC = () => {
 
         img.onload = () => {
           ctx?.drawImage(img, 0, 0, size, size);
-          resolve(canvas.toDataURL('image/png'));
+          resolve(canvas.toDataURL("image/png"));
         };
         img.src = `data:image/svg+xml;base64,${btoa(svg)}`;
       });
     };
 
-    const imagePromises = report.matching_table.map(item => {
+    const imagePromises = report.matching_table.map((item) => {
       const iconKey = item.match.toLowerCase() as keyof typeof icons;
-      return icons[iconKey] ? svgToPng(icons[iconKey].svg, 64) : Promise.resolve(null);
+      return icons[iconKey]
+        ? svgToPng(icons[iconKey].svg, 64)
+        : Promise.resolve(null);
     });
     const pngImages = await Promise.all(imagePromises);
 
-    doc.setFont('Roboto', 'bold');
+    doc.setFont("Roboto", "bold");
     doc.setFontSize(18);
     doc.text("Предварительная оценка кандидата", 14, 20);
-    doc.setFont('Roboto', 'normal');
+    doc.setFont("Roboto", "normal");
     doc.setFontSize(14);
-    doc.text(`${report.first_name || ''} ${report.last_name || ''}`, 14, 30);
+    doc.text(`${report.first_name || ""} ${report.last_name || ""}`, 14, 30);
     const profileY = 30 + 10;
     doc.setFontSize(12);
-    doc.text(`Предполагаемый профиль: ${report.candidate_profile}`, 14, profileY);
+    doc.text(
+      `Предполагаемый профиль: ${report.candidate_profile}`,
+      14,
+      profileY
+    );
     const tableTitleY = profileY + 15;
-    doc.setFont('Roboto', 'bold');
+    doc.setFont("Roboto", "bold");
     doc.setFontSize(14);
     doc.text("Соответствие ключевым критериям", 14, tableTitleY);
 
     autoTable(doc, {
       startY: tableTitleY + 5,
-      head: [['Критерий', 'Соответствие', 'Пояснение']],
-      body: report.matching_table.map(item => [item.criterion, '', item.comment]),
-      theme: 'grid',
-      styles: { font: 'Roboto', fontSize: 10, fontStyle: 'normal' },
-      headStyles: { fillColor: [41, 128, 185], font: 'Roboto', fontStyle: 'bold' },
+      head: [["Критерий", "Соответствие", "Пояснение"]],
+      body: report.matching_table.map((item) => [
+        item.criterion,
+        "",
+        item.comment,
+      ]),
+      theme: "grid",
+      styles: { font: "Roboto", fontSize: 10, fontStyle: "normal" },
+      headStyles: {
+        fillColor: [41, 128, 185],
+        font: "Roboto",
+        fontStyle: "bold",
+      },
       didDrawCell: (data) => {
-        if (data.section === 'body' && data.column.index === 1) {
+        if (data.section === "body" && data.column.index === 1) {
           const pngImage = pngImages[data.row.index];
           if (pngImage) {
             const imgSize = 5;
             const x = data.cell.x + (data.cell.width - imgSize) / 2;
             const y = data.cell.y + (data.cell.height - imgSize) / 2;
-            doc.addImage(pngImage, 'PNG', x, y, imgSize, imgSize);
+            doc.addImage(pngImage, "PNG", x, y, imgSize, imgSize);
           }
         }
       },
       columnStyles: {
         0: { cellWidth: 55 },
-        1: { cellWidth: 35, halign: 'center' },
-        2: { cellWidth: 'auto' }
+        1: { cellWidth: 35, halign: "center" },
+        2: { cellWidth: "auto" },
       },
     });
 
@@ -205,13 +280,15 @@ const InterviewPreparation: React.FC = () => {
         doc.addPage();
         lastY = 20;
       }
-      doc.setFont('Roboto', 'bold');
+      doc.setFont("Roboto", "bold");
       doc.setFontSize(14);
       doc.text(title, 14, lastY);
       lastY += 7;
-      doc.setFont('Roboto', 'normal');
+      doc.setFont("Roboto", "normal");
       doc.setFontSize(10);
-      const textToSplit = Array.isArray(content) ? content.join('\n') : content;
+      const textToSplit = Array.isArray(content)
+        ? content.join("\n")
+        : content;
       const splitText = doc.splitTextToSize(textToSplit, 180);
       doc.text(splitText, 14, lastY);
       lastY += splitText.length * 5 + 5;
@@ -219,13 +296,20 @@ const InterviewPreparation: React.FC = () => {
 
     addTextBlock("Общий вывод", report.conclusion.summary);
     addTextBlock("Рекомендации по развитию", report.conclusion.recommendations);
-    addTextBlock("Темы для технического интервью", report.conclusion.interview_topics);
-    addTextBlock("Оценка соответствия ценностям", report.conclusion.values_assessment);
+    addTextBlock(
+      "Темы для технического интервью",
+      report.conclusion.interview_topics
+    );
+    addTextBlock(
+      "Оценка соответствия ценностям",
+      report.conclusion.values_assessment
+    );
 
-    const fileName = `Предварительная оценка кандидата - ${report.first_name || ''} ${report.last_name || ''}.pdf`;
+    const fileName = `Предварительная оценка кандидата - ${
+      report.first_name || ""
+    } ${report.last_name || ""}.pdf`;
     doc.save(fileName);
   };
-
 
   return (
     <div className="container mx-auto p-4">
@@ -234,13 +318,19 @@ const InterviewPreparation: React.FC = () => {
         <CardHeader>
           <CardTitle>Оценка кандидата</CardTitle>
           <CardDescription>
-            Загрузите резюме, вставьте фидбэк от рекрутера и при необходимости измените ссылку на требования для генерации отчета.
+            Загрузите резюме, вставьте фидбэк от рекрутера и при необходимости
+            измените ссылку на требования для генерации отчета.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid w-full max-w-sm items-center gap-1.5">
             <Label htmlFor="cv-file">Резюме (.txt, .pdf, .docx)</Label>
-            <Input id="cv-file" type="file" onChange={handleCvFileChange} accept=".txt,.pdf,.docx" />
+            <Input
+              id="cv-file"
+              type="file"
+              onChange={handleCvFileChange}
+              accept=".txt,.pdf,.docx"
+            />
           </div>
           <div className="grid w-full gap-1.5">
             <Label htmlFor="feedback-text">Фидбек от рекрутера</Label>
@@ -261,41 +351,74 @@ const InterviewPreparation: React.FC = () => {
             />
           </div>
           <CardDescription>
-            При изменении ссылки убедитесь, что документ является Google-таблицей и находится в папке, к которой у сервиса ai-hiring-tool-service@ai-hiring-tool.iam.gserviceaccount.com есть доступ уровня Contributor/Editor.
+            При изменении ссылки убедитесь, что документ является
+            Google-таблицей и находится в папке, к которой у сервиса
+            ai-hiring-tool-service@ai-hiring-tool.iam.gserviceaccount.com есть
+            доступ уровня Contributor/Editor.
           </CardDescription>
         </CardContent>
-        <CardFooter>
-          <Button onClick={handleSubmit} disabled={isLoading}>
-            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {isLoading ? 'Анализ...' : 'Начать анализ'}
-          </Button>
-        </CardFooter>
       </Card>
 
-      {analysisResponse && (
+      <div className="text-center pt-4">
+        <Button
+          onClick={handleSubmit}
+          disabled={isLoading || !cvFile || !feedbackText}
+          className="bg-gradient-primary hover:shadow-glow transition-all duration-300 px-8 py-6 text-lg"
+          size="lg"
+        >
+          {isLoading ? (
+            <>
+              <Brain className="w-6 h-6 mr-3 animate-spin" />
+              <span>Обработка...</span>
+            </>
+          ) : (
+            <>
+              <Brain className="w-6 h-6 mr-3" />
+              <span>Запустить AI-анализ</span>
+            </>
+          )}
+        </Button>
+      </div>
+
+      {isLoading && (
+        <div className="text-center py-10">
+          <p>Идет анализ... Это может занять несколько минут.</p>
+          <Progress value={50} className="w-1-2 mx-auto mt-4 animate-pulse" />
+        </div>
+      )}
+
+      {cachedData && !isLoading && (
         <Card className="mt-6">
           <CardHeader>
             <div className="flex justify-between items-center">
               <CardTitle>Результаты анализа</CardTitle>
-              <Button onClick={handleExportPdf} variant="outline">Экспорт в PDF</Button>
+              <Button onClick={handleExportPdf} variant="outline">
+                Экспорт в PDF
+              </Button>
             </div>
             <CardDescription>
-              {`Профиль: ${analysisResponse.report.candidate_profile} (${analysisResponse.report.first_name || ''} ${analysisResponse.report.last_name || ''})`}
+              {`Профиль: ${cachedData.report.candidate_profile} (${
+                cachedData.report.first_name || ""
+              } ${cachedData.report.last_name || ""})`}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <h3 className="font-bold text-lg mb-2">Соответствие ключевым критериям</h3>
+            <h3 className="font-bold text-lg mb-2">
+              Соответствие ключевым критериям
+            </h3>
             <div className="border rounded-md">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-[40%]">Критерий</TableHead>
-                    <TableHead className="w-[15%] text-center">Соответствие</TableHead>
+                    <TableHead className="w-[15%] text-center">
+                      Соответствие
+                    </TableHead>
                     <TableHead>Пояснение</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {analysisResponse.report.matching_table.map((item, index) => (
+                  {cachedData.report.matching_table.map((item, index) => (
                     <TableRow key={index}>
                       <TableCell>{item.criterion}</TableCell>
                       <TableCell className="text-center">
@@ -308,20 +431,32 @@ const InterviewPreparation: React.FC = () => {
               </Table>
             </div>
             <h3 className="font-bold text-lg mt-4 mb-2">Общий вывод</h3>
-            <p className="text-sm">{analysisResponse.report.conclusion.summary}</p>
+            <p className="text-sm">{cachedData.report.conclusion.summary}</p>
 
-            <h3 className="font-bold text-lg mt-4 mb-2">Рекомендации по развитию</h3>
-            <p className="text-sm">{analysisResponse.report.conclusion.recommendations}</p>
+            <h3 className="font-bold text-lg mt-4 mb-2">
+              Рекомендации по развитию
+            </h3>
+            <p className="text-sm">
+              {cachedData.report.conclusion.recommendations}
+            </p>
 
-            <h3 className="font-bold text-lg mt-4 mb-2">Темы для технического интервью</h3>
+            <h3 className="font-bold text-lg mt-4 mb-2">
+              Темы для технического интервью
+            </h3>
             <ul className="list-disc list-inside text-sm space-y-1">
-              {analysisResponse.report.conclusion.interview_topics.map((topic, index) => (
-                <li key={index}>{topic}</li>
-              ))}
+              {cachedData.report.conclusion.interview_topics.map(
+                (topic, index) => (
+                  <li key={index}>{topic}</li>
+                )
+              )}
             </ul>
 
-            <h3 className="font-bold text-lg mt-4 mb-2">Соответствие ценностям компании</h3>
-            <p className="text-sm">{analysisResponse.report.conclusion.values_assessment}</p>
+            <h3 className="font-bold text-lg mt-4 mb-2">
+              Соответствие ценностям компании
+            </h3>
+            <p className="text-sm">
+              {cachedData.report.conclusion.values_assessment}
+            </p>
           </CardContent>
         </Card>
       )}

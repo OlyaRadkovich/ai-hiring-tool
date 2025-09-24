@@ -36,8 +36,8 @@ class AnalysisService:
         self.request_counter = 0
         self.session_total_tokens = 0
         try:
-            credentials_path = settings.google_application_credentials
-            if os.path.exists(credentials_path):
+            credentials_path = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
+            if credentials_path and os.path.exists(credentials_path):
                 creds = service_account.Credentials.from_service_account_file(credentials_path)
                 scoped_credentials = creds.with_scopes(['https://www.googleapis.com/auth/drive'])
                 http_client_with_timeout = httplib2.Http(timeout=600)

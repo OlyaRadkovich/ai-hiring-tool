@@ -20,23 +20,27 @@ steps:
     args:
       - 'run'
       - 'deploy'
-      - 'ai-hiring-tool-backend' # Имя сервиса в Cloud Run
+      - 'ai-hiring-tool-backend'
       - '--image=europe-west1-docker.pkg.dev/$PROJECT_ID/ai-hiring-repo/ai-hiring-tool-backend:$COMMIT_SHA'
       - '--region=europe-west1'
+      - '--service-account=ai-hiring-tool@qa-assistant-452611.iam.gserviceaccount.com'
       - '--platform=managed'
       - '--port=8000'
       - '--allow-unauthenticated'
+      - '--memory=2Gi'
       - '--set-secrets=GOOGLE_API_KEY=google-api-key:latest,ASSEMBLYAI_API_KEY=assemblyai-api-key:latest,GOOGLE_APPLICATION_B64=google-application-b64:latest'
 
   - name: 'gcr.io/cloud-builders/docker'
     id: 'Build Frontend Image'
     args:
       - 'build'
+      - '--build-arg'
+      - 'VITE_API_URL=https://ai-hiring-tool-backend-1053066596162.europe-west1.run.app'
       - '-t'
       - 'europe-west1-docker.pkg.dev/$PROJECT_ID/ai-hiring-repo/ai-hiring-tool-frontend:$COMMIT_SHA'
       - '.'
       - '-f'
-      - 'Dockerfile'
+      - 'Prod.dockerfile'
 
   - name: 'gcr.io/cloud-builders/docker'
     id: 'Push Frontend Image'
@@ -52,10 +56,14 @@ steps:
       - 'ai-hiring-tool-frontend'
       - '--image=europe-west1-docker.pkg.dev/$PROJECT_ID/ai-hiring-repo/ai-hiring-tool-frontend:$COMMIT_SHA'
       - '--region=europe-west1'
+      - '--service-account=ai-hiring-tool@qa-assistant-452611.iam.gserviceaccount.com'
       - '--platform=managed'
-      - '--port=8080'
+      - '--port=80'
       - '--allow-unauthenticated'
 
 images:
   - 'europe-west1-docker.pkg.dev/$PROJECT_ID/ai-hiring-repo/ai-hiring-tool-backend:$COMMIT_SHA'
   - 'europe-west1-docker.pkg.dev/$PROJECT_ID/ai-hiring-repo/ai-hiring-tool-frontend:$COMMIT_SHA'
+
+options:
+  logging: CLOUD_LOGGING_ONLY

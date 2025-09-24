@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
@@ -15,13 +21,67 @@ import {
   UserCheck,
   ClipboardList,
   FileJson,
-  BookUser
+  BookUser,
 } from "lucide-react";
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
+
+interface CandidateInfo {
+  full_name: string;
+  experience_years: string;
+  tech_stack: string[];
+  projects: string[];
+  domains: string[];
+  tasks: string[];
+}
+
+interface InterviewAnalysis {
+  topics: string[];
+  tech_assignment: string;
+  knowledge_assessment: string;
+}
+
+interface CommunicationSkills {
+  assessment: string;
+}
+
+interface ForeignLanguages {
+  assessment: string;
+}
+
+interface FinalConclusion {
+  recommendation: string;
+  assessed_level: string;
+  summary: string;
+}
+
+interface FullReport {
+  ai_summary: string;
+  candidate_info: CandidateInfo;
+  interview_analysis: InterviewAnalysis;
+  communication_skills: CommunicationSkills;
+  foreign_languages: ForeignLanguages;
+  team_fit: string;
+  additional_information: string[];
+  conclusion: FinalConclusion;
+  recommendations_for_candidate: string[];
+}
+
+interface ResultsAnalysisResponse {
+  message: string;
+  success: boolean;
+  report: FullReport;
+}
+
+interface InterviewResultsProps {
+  cachedData: ResultsAnalysisResponse | undefined;
+  updateCache: (data: ResultsAnalysisResponse | undefined) => void;
+  isProcessing: boolean;
+  setIsProcessing: (status: boolean) => void;
+}
 
 const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
-  let binary = '';
+  let binary = "";
   const bytes = new Uint8Array(buffer);
   const len = bytes.byteLength;
   for (let i = 0; i < len; i++) {
@@ -30,35 +90,75 @@ const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
   return window.btoa(binary);
 };
 
-
-export default function InterviewResults() {
-
+export default function InterviewResults({
+  cachedData,
+  updateCache,
+  isProcessing,
+  setIsProcessing,
+}: InterviewResultsProps) {
   const [cvFile, setCvFile] = useState<File | null>(null);
   const [videoLink, setVideoLink] = useState("");
-  const [competencyMatrixLink, setCompetencyMatrixLink] = useState("https://docs.google.com/spreadsheets/d/1VzwMPfgBn6xB0xKnJ-DD-0bkBQDOvbjihwuT6FKo8qY/edit?usp=drive_link");
-  const [departmentValuesLink, setDepartmentValuesLink] = useState("https://docs.google.com/spreadsheets/d/1KX1ihfOTm7OGEI942cEii4dj9T8VvtmUhisE49WYAUo/edit?usp=drive_link");
-  const [employeePortraitLink, setEmployeePortraitLink] = useState("https://docs.google.com/spreadsheets/d/1hIksOP9zcBy5fFZ12SyA_lc6xsL0EXHPC2Y86YykVPI/edit?usp=drive_link");
-  const [jobRequirementsLink, setJobRequirementsLink] = useState("https://docs.google.com/spreadsheets/d/1JOYzYmAtaPzHHuN2CvdrCXn_L30bBNlikJ5K0mRt-HE/edit?usp=drive_link");
+  const [competencyMatrixLink, setCompetencyMatrixLink] = useState(
+    "https://docs.google.com/spreadsheets/d/1VzwMPfgBn6xB0xKnJ-DD-0bkBQDOvbjihwuT6FKo8qY/edit?usp=drive_link"
+  );
+  const [departmentValuesLink, setDepartmentValuesLink] = useState(
+    "https://docs.google.com/spreadsheets/d/1KX1ihfOTm7OGEI942cEii4dj9T8VvtmUhisE49WYAUo/edit?usp=drive_link"
+  );
+  const [employeePortraitLink, setEmployeePortraitLink] = useState(
+    "https://docs.google.com/spreadsheets/d/1hIksOP9zcBy5fFZ12SyA_lc6xsL0EXHPC2Y86YykVPI/edit?usp=drive_link"
+  );
+  const [jobRequirementsLink, setJobRequirementsLink] = useState(
+    "https://docs.google.com/spreadsheets/d/1JOYzYmAtaPzHHuN2CvdrCXn_L30bBNlikJ5K0mRt-HE/edit?usp=drive_link"
+  );
 
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [analysisResults, setAnalysisResults] = useState<any>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
-  const handleFileChange = (setter: React.Dispatch<React.SetStateAction<File | null>>) => (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      setter(file);
+      setCvFile(file);
+    }
+  };
+
+  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDragging(false);
+    const file = event.dataTransfer.files?.[0];
+    if (
+      file &&
+      (file.type === "application/pdf" ||
+        file.type ===
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+        file.type === "text/plain")
+    ) {
+      setCvFile(file);
     }
   };
 
   const handleAnalyzeInterview = async () => {
     if (!cvFile || !videoLink) {
-        alert("Пожалуйста, загрузите CV и укажите ссылку на видеозапись.");
-        return;
+      alert("Пожалуйста, загрузите CV и укажите ссылку на видеозапись.");
+      return;
     }
 
+    const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+    const endpoint = `${API_BASE_URL}/api/results/`;
+
     setIsProcessing(true);
-    setAnalysisResults(null);
+    updateCache(undefined);
+    let rawResponseText = "";
+
     try {
       const form = new FormData();
       form.append("cv_file", cvFile);
@@ -68,118 +168,291 @@ export default function InterviewResults() {
       form.append("employee_portrait_link", employeePortraitLink);
       form.append("job_requirements_link", jobRequirementsLink);
 
-      const res = await fetch("/api/results/", { method: "POST", body: form });
+      const res = await fetch(endpoint, {
+        method: "POST",
+        body: form,
+      });
+
+      rawResponseText = await res.text();
 
       if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.detail || "Analyze failed");
+        try {
+          const errorData = JSON.parse(rawResponseText);
+          throw new Error(errorData.detail || "Analyze failed");
+        } catch {
+          throw new Error(rawResponseText || `Server returned status ${res.status}`);
+        }
       }
-      const data = await res.json();
-      setAnalysisResults(data);
+
+      const data = JSON.parse(rawResponseText);
+      updateCache(data)
+
     } catch (err: any) {
-      console.error(err);
-      alert(`Произошла ошибка: ${err.message}`);
+      console.error("Ошибка обработки ответа от сервера:", err);
+      console.error("Сырой ответ от сервера (Raw response):", rawResponseText);
+      alert(`Произошла ошибка: ${err.message}. Подробности смотрите в консоли разработчика (F12).`);
     } finally {
       setIsProcessing(false);
     }
   };
 
   const handleExportPdf = async () => {
-    if (!analysisResults || !analysisResults.report) return;
+    if (!cachedData || !cachedData.report) return;
     setIsExporting(true);
 
     try {
-        const doc = new jsPDF();
-        const report = analysisResults.report;
+      const doc = new jsPDF();
+      const report = cachedData.report;
 
-        const fontNormalResponse = await fetch('/fonts/Roboto-Light.ttf');
-        const fontNormalBuffer = await fontNormalResponse.arrayBuffer();
+      const fontNormalResponse = await fetch("/fonts/Roboto-Light.ttf");
+      const fontNormalBuffer = await fontNormalResponse.arrayBuffer();
 
-        const fontBoldResponse = await fetch('/fonts/Roboto-SemiBold.ttf');
-        const fontBoldBuffer = await fontBoldResponse.arrayBuffer();
+      const fontBoldResponse = await fetch("/fonts/Roboto-SemiBold.ttf");
+      const fontBoldBuffer = await fontBoldResponse.arrayBuffer();
 
-        doc.addFileToVFS('Roboto-Light.ttf', arrayBufferToBase64(fontNormalBuffer));
-        doc.addFont('Roboto-Light.ttf', 'Roboto', 'normal');
+      doc.addFileToVFS(
+        "Roboto-Light.ttf",
+        arrayBufferToBase64(fontNormalBuffer)
+      );
+      doc.addFont("Roboto-Light.ttf", "Roboto", "normal");
 
-        doc.addFileToVFS('Roboto-SemiBold.ttf', arrayBufferToBase64(fontBoldBuffer));
-        doc.addFont('Roboto-SemiBold.ttf', 'Roboto', 'bold');
+      doc.addFileToVFS(
+        "Roboto-SemiBold.ttf",
+        arrayBufferToBase64(fontBoldBuffer)
+      );
+      doc.addFont("Roboto-SemiBold.ttf", "Roboto", "bold");
 
-        doc.setFont('Roboto');
+      doc.setFont("Roboto");
 
-        doc.setFontSize(14);
-        doc.setFont('Roboto', 'bold');
-        doc.text(`Фидбек на кандидата ${report.candidate_info.full_name}`, 15, 15);
+      doc.setFontSize(14);
+      doc.setFont("Roboto", "bold");
+      doc.text(
+        `Фидбек на кандидата ${report.candidate_info.full_name}`,
+        15,
+        15
+      );
 
-        const body = [
-          [{ content: 'AI-generated summary:', styles: { fontStyle: 'bold' } }],
-          [{ content: report.ai_summary, styles: { fontStyle: 'normal' } }],
-          [{ content: ' ', styles: { minCellHeight: 5 } }],
+      const body = [
+        [{ content: "AI-generated summary:", styles: { fontStyle: "bold" } }],
+        [{ content: report.ai_summary, styles: { fontStyle: "normal" } }],
+        [{ content: " ", styles: { minCellHeight: 5 } }],
 
-          [{ content: '1. Информация о кандидате', styles: { fontSize: 12, fontStyle: 'bold' } }],
-          [{ content: '1.1 Опыт', styles: { fontStyle: 'bold' } }],
-          [{ content: 'Количество лет опыта:', styles: { fontStyle: 'bold' } }],
-          [{ content: report.candidate_info.experience_years, styles: { fontStyle: 'normal' } }],
-          [{ content: 'Стеки технологий:', styles: { fontStyle: 'bold' } }],
-          [{ content: report.candidate_info.tech_stack.join(', '), styles: { fontStyle: 'normal' } }],
-          [{ content: 'Проекты:', styles: { fontStyle: 'bold' } }],
-          [{ content: report.candidate_info.projects.join(', '), styles: { fontStyle: 'normal' } }],
-          [{ content: 'Домены:', styles: { fontStyle: 'bold' } }],
-          [{ content: report.candidate_info.domains.join(', '), styles: { fontStyle: 'normal' } }],
-          [{ content: 'Задачи, которые выполнял(а):', styles: { fontStyle: 'bold' } }],
-          [{ content: report.candidate_info.tasks.join(', '), styles: { fontStyle: 'normal' } }],
-          [{ content: '1.2 Технические знания', styles: { fontStyle: 'bold' } }],
-          [{ content: 'Темы, которые затрагивались на собеседовании:', styles: { fontStyle: 'bold' } }],
-          [{ content: report.interview_analysis.topics.join(', '), styles: { fontStyle: 'normal' } }],
-          [{ content: 'Тех задание:', styles: { fontStyle: 'bold' } }],
-          [{ content: report.interview_analysis.tech_assignment, styles: { fontStyle: 'normal' } }],
-          [{ content: 'Оценка знаний по этим темам:', styles: { fontStyle: 'bold' } }],
-          [{ content: report.interview_analysis.knowledge_assessment, styles: { fontStyle: 'normal' } }],
-          [{ content: '1.3 Коммуникационные навыки', styles: { fontStyle: 'bold' } }],
-          [{ content: 'Оценка коммуникационных навыков:', styles: { fontStyle: 'bold' } }],
-          [{ content: report.communication_skills.assessment, styles: { fontStyle: 'normal' } }],
-          [{ content: ' ', styles: { minCellHeight: 5 } }],
-          [{ content: '1.4 Иностранные языки', styles: { fontStyle: 'bold' } }],
-          [{ content: 'Уровень владения иностранными языками:', styles: { fontStyle: 'bold' } }],
-          [{ content: report.foreign_languages.assessment, styles: { fontStyle: 'normal' } }],
-          [{ content: ' ', styles: { minCellHeight: 5 } }],
+        [
+          {
+            content: "1. Информация о кандидате",
+            styles: { fontSize: 12, fontStyle: "bold" },
+          },
+        ],
+        [{ content: "1.1 Опыт", styles: { fontStyle: "bold" } }],
+        [{ content: "Количество лет опыта:", styles: { fontStyle: "bold" } }],
+        [
+          {
+            content: report.candidate_info.experience_years,
+            styles: { fontStyle: "normal" },
+          },
+        ],
+        [{ content: "Стеки технологий:", styles: { fontStyle: "bold" } }],
+        [
+          {
+            content: report.candidate_info.tech_stack.join(", "),
+            styles: { fontStyle: "normal" },
+          },
+        ],
+        [{ content: "Проекты:", styles: { fontStyle: "bold" } }],
+        [
+          {
+            content: report.candidate_info.projects.join(", "),
+            styles: { fontStyle: "normal" },
+          },
+        ],
+        [{ content: "Домены:", styles: { fontStyle: "bold" } }],
+        [
+          {
+            content: report.candidate_info.domains.join(", "),
+            styles: { fontStyle: "normal" },
+          },
+        ],
+        [
+          {
+            content: "Задачи, которые выполнял(а):",
+            styles: { fontStyle: "bold" },
+          },
+        ],
+        [
+          {
+            content: report.candidate_info.tasks.join(", "),
+            styles: { fontStyle: "normal" },
+          },
+        ],
+        [
+          {
+            content: "1.2 Технические знания",
+            styles: { fontStyle: "bold" },
+          },
+        ],
+        [
+          {
+            content: "Темы, которые затрагивались на собеседовании:",
+            styles: { fontStyle: "bold" },
+          },
+        ],
+        [
+          {
+            content: report.interview_analysis.topics.join(", "),
+            styles: { fontStyle: "normal" },
+          },
+        ],
+        [{ content: "Тех задание:", styles: { fontStyle: "bold" } }],
+        [
+          {
+            content: report.interview_analysis.tech_assignment,
+            styles: { fontStyle: "normal" },
+          },
+        ],
+        [
+          {
+            content: "Оценка знаний по этим темам:",
+            styles: { fontStyle: "bold" },
+          },
+        ],
+        [
+          {
+            content: report.interview_analysis.knowledge_assessment,
+            styles: { fontStyle: "normal" },
+          },
+        ],
+        [
+          {
+            content: "1.3 Коммуникационные навыки",
+            styles: { fontStyle: "bold" },
+          },
+        ],
+        [
+          {
+            content: "Оценка коммуникационных навыков:",
+            styles: { fontStyle: "bold" },
+          },
+        ],
+        [
+          {
+            content: report.communication_skills.assessment,
+            styles: { fontStyle: "normal" },
+          },
+        ],
+        [{ content: " ", styles: { minCellHeight: 5 } }],
+        [
+          {
+            content: "1.4 Иностранные языки",
+            styles: { fontStyle: "bold" },
+          },
+        ],
+        [
+          {
+            content: "Уровень владения иностранными языками:",
+            styles: { fontStyle: "bold" },
+          },
+        ],
+        [
+          {
+            content: report.foreign_languages.assessment,
+            styles: { fontStyle: "normal" },
+          },
+        ],
+        [{ content: " ", styles: { minCellHeight: 5 } }],
 
-          [{ content: '2. Соответствие команде', styles: { fontSize: 12, fontStyle: 'bold' } }],
-          [{ content: 'Насколько кандидат соответствует ценностям и взглядам команды:', styles: { fontStyle: 'bold' } }],
-          [{ content: report.team_fit, styles: { fontStyle: 'normal' } }],
-          [{ content: ' ', styles: { minCellHeight: 5 } }],
+        [
+          {
+            content: "2. Соответствие команде",
+            styles: { fontSize: 12, fontStyle: "bold" },
+          },
+        ],
+        [
+          {
+            content:
+              "Насколько кандидат соответствует ценностям и взглядам команды:",
+            styles: { fontStyle: "bold" },
+          },
+        ],
+        [
+          {
+            content: report.team_fit,
+            styles: { fontStyle: "normal" },
+          },
+        ],
+        [{ content: " ", styles: { minCellHeight: 5 } }],
 
-          [{ content: '3. Дополнительная информация', styles: { fontSize: 12, fontStyle: 'bold' } }],
-          ...report.additional_information.length > 0
-            ? report.additional_information.map((info: string) => [{ content: `○ ${info}`, styles: { fontStyle: 'normal' } }])
-            : [[{ content: 'Нет.', styles: { fontStyle: 'normal' } }]],
-          [{ content: ' ', styles: { minCellHeight: 5 } }],
+        [
+          {
+            content: "3. Дополнительная информация",
+            styles: { fontSize: 12, fontStyle: "bold" },
+          },
+        ],
+        ...(report.additional_information.length > 0
+          ? report.additional_information.map((info: string) => [
+              { content: `○ ${info}`, styles: { fontStyle: "normal" } },
+            ])
+          : [[{ content: "Нет.", styles: { fontStyle: "normal" } }]]),
+        [{ content: " ", styles: { minCellHeight: 5 } }],
 
-          [{ content: '4. Заключение', styles: { fontSize: 12, fontStyle: 'bold' } }],
-          [{ content: `1. ${report.conclusion.recommendation}`, styles: { fontStyle: 'normal' } }],
-          [{ content: `2. По уровню знаний оцениваем его на уровень ${report.conclusion.assessed_level}`, styles: { fontStyle: 'normal' } }],
-          [{ content: `3. ${report.conclusion.summary}`, styles: { fontStyle: 'normal' } }],
-          [{ content: ' ', styles: { minCellHeight: 5 } }],
+        [
+          {
+            content: "4. Заключение",
+            styles: { fontSize: 12, fontStyle: "bold" },
+          },
+        ],
+        [
+          {
+            content: `1. ${report.conclusion.recommendation}`,
+            styles: { fontStyle: "normal" },
+          },
+        ],
+        [
+          {
+            content: `2. По уровню знаний оцениваем его на уровень ${report.conclusion.assessed_level}`,
+            styles: { fontStyle: "normal" },
+          },
+        ],
+        [
+          {
+            content: `3. ${report.conclusion.summary}`,
+            styles: { fontStyle: "normal" },
+          },
+        ],
+        [{ content: " ", styles: { minCellHeight: 5 } }],
 
-          [{ content: '5. Рекомендации для кандидата', styles: { fontSize: 12, fontStyle: 'bold' } }],
-          ...report.recommendations_for_candidate.length > 0
-            ? report.recommendations_for_candidate.map((rec: string) => [{ content: `● ${rec}`, styles: { fontStyle: 'normal' } }])
-            : [[{ content: 'Рекомендации не сгенерированы.', styles: { fontStyle: 'normal' } }]],
-        ];
+        [
+          {
+            content: "5. Рекомендации для кандидата",
+            styles: { fontSize: 12, fontStyle: "bold" },
+          },
+        ],
+        ...(report.recommendations_for_candidate.length > 0
+          ? report.recommendations_for_candidate.map((rec: string) => [
+              { content: `● ${rec}`, styles: { fontStyle: "normal" } },
+            ])
+          : [
+              [
+                {
+                  content: "Рекомендации не сгенерированы.",
+                  styles: { fontStyle: "normal" },
+                },
+              ],
+            ]),
+      ];
 
-        autoTable(doc, {
-            startY: 25,
-            body: body,
-            theme: 'plain',
-            styles: {
-                font: 'Roboto',
-                fontSize: 10,
-                cellPadding: { top: 1, right: 0, bottom: 1, left: 0 },
-            }
-        });
+      autoTable(doc, {
+        startY: 25,
+        body: body,
+        theme: "plain",
+        styles: {
+          font: "Roboto",
+          fontSize: 10,
+          cellPadding: { top: 1, right: 0, bottom: 1, left: 0 },
+        },
+      });
 
-        const fullName = report.candidate_info.full_name.replace(/\s+/g, '_');
-        doc.save(`Фидбек на кандидата ${fullName}.pdf`);
-
+      const fullName = report.candidate_info.full_name.replace(/\s+/g, "_");
+      doc.save(`Фидбек на кандидата ${fullName}.pdf`);
     } catch (error) {
       console.error("Ошибка при создании PDF:", error);
       alert("Не удалось создать PDF файл.");
@@ -194,125 +467,296 @@ export default function InterviewResults() {
       <div className="grid md:grid-cols-2 gap-6">
         <Card className="shadow-card">
           <CardHeader>
-            <CardTitle className="flex items-center space-x-2"><BookUser className="w-5 h-5 text-primary" /><span>CV Кандидата</span></CardTitle>
-            <CardDescription>Загрузите резюме в формате .txt, .pdf или .docx</CardDescription>
+            <CardTitle className="flex items-center space-x-2">
+              <BookUser className="w-5 h-5 text-primary" />
+              <span>CV Кандидата</span>
+            </CardTitle>
+            <CardDescription>
+              Перетащите файл или нажмите на область для загрузки .txt, .pdf,
+              .docx
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="border-2 border-dashed border-border rounded-lg p-6 text-center hover:border-primary/50 transition-colors">
-              <input type="file" id="cv-upload" accept=".pdf,.docx, .txt" onChange={handleFileChange(setCvFile)} className="hidden" />
+            <div
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+                isDragging
+                  ? "border-primary bg-primary/10"
+                  : "border-border hover:border-primary/50"
+              }`}
+            >
+              <input
+                type="file"
+                id="cv-upload"
+                accept=".pdf,.docx, .txt"
+                onChange={handleFileChange}
+                className="hidden"
+              />
               <label htmlFor="cv-upload" className="cursor-pointer">
                 <Upload className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-                <p className="text-sm text-muted-foreground mb-2">{cvFile ? cvFile.name : "Нажмите для загрузки CV"}</p>
+                <p className="text-sm text-muted-foreground mb-2">
+                  {cvFile
+                    ? cvFile.name
+                    : "Нажмите или перетащите файл для загрузки"}
+                </p>
               </label>
             </div>
-            {cvFile && <Badge variant="secondary" className="mt-3">✓ {cvFile.name} загружен</Badge>}
+            {cvFile && (
+              <Badge variant="secondary" className="mt-3">
+                ✓ {cvFile.name} загружен
+              </Badge>
+            )}
           </CardContent>
         </Card>
 
         <Card className="shadow-card">
           <CardHeader>
-            <CardTitle className="flex items-center space-x-2"><Video className="w-5 h-5 text-primary" /><span>Видеозапись собеседования</span></CardTitle>
-            <CardDescription>Перед добавлением ссылки убедитесь, что видео находится в папке, к которой у сервиса ai-hiring-tool-service@ai-hiring-tool.iam.gserviceaccount.com есть доступ уровня Contributor/Editor.</CardDescription>
+            <CardTitle className="flex items-center space-x-2">
+              <Video className="w-5 h-5 text-primary" />
+              <span>Видеозапись собеседования</span>
+            </CardTitle>
+            <CardDescription>
+              Файл с видеозаписью должен находиться в папке InterviewsRecords.
+            </CardDescription>
+            <CardDescription>
+              Путь: QA Common / QAHiringToInnowise / InterviewsRecords.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <Label htmlFor="video-link">Ссылка на видео</Label>
-            <Input id="video-link" type="url" placeholder="https://drive.google.com/file/d/..." value={videoLink} onChange={(e) => setVideoLink(e.target.value)} />
+            <Input
+              id="video-link"
+              type="url"
+              placeholder="https://drive.google.com/file/d/..."
+              value={videoLink}
+              onChange={(e) => setVideoLink(e.target.value)}
+            />
           </CardContent>
         </Card>
 
         <Card className="shadow-card md:col-span-2">
           <CardHeader>
-            <CardTitle className="flex items-center space-x-2"><FileJson className="w-5 h-5 text-accent" /><span>Дополнительные материалы (Google Drive)</span></CardTitle>
-            <CardDescription>При изменении ссылки убедитесь, что документ является Google-таблицей и находится в папке, к которой у сервиса ai-hiring-tool-service@ai-hiring-tool.iam.gserviceaccount.com есть доступ уровня Contributor/Editor.</CardDescription>
+            <CardTitle className="flex items-center space-x-2">
+              <FileJson className="w-5 h-5 text-accent" />
+              <span>Дополнительные материалы (Google Drive)</span>
+            </CardTitle>
+            <CardDescription>
+              При изменении ссылки убедитесь, что документ является
+              Google-таблицей и находится в папке, к которой у сервиса
+              ai-hiring-tool-service@ai-hiring-tool.iam.gserviceaccount.com
+              есть доступ уровня Contributor/Editor.
+            </CardDescription>
           </CardHeader>
           <CardContent className="grid md:grid-cols-2 gap-6">
             <div className="space-y-2">
-                <Label htmlFor="competency-matrix-link" className="flex items-center space-x-2"><FileText className="w-4 h-4" /><span>Матрица компетенций</span></Label>
-                <Input id="competency-matrix-link" type="url" value={competencyMatrixLink} onChange={(e) => setCompetencyMatrixLink(e.target.value)} />
+              <Label
+                htmlFor="competency-matrix-link"
+                className="flex items-center space-x-2"
+              >
+                <FileText className="w-4 h-4" />
+                <span>Матрица компетенций</span>
+              </Label>
+              <Input
+                id="competency-matrix-link"
+                type="url"
+                value={competencyMatrixLink}
+                onChange={(e) => setCompetencyMatrixLink(e.target.value)}
+              />
             </div>
             <div className="space-y-2">
-                <Label htmlFor="department-values-link" className="flex items-center space-x-2"><Building className="w-4 h-4" /><span>Ценности департамента</span></Label>
-                <Input id="department-values-link" type="url" value={departmentValuesLink} onChange={(e) => setDepartmentValuesLink(e.target.value)} />
+              <Label
+                htmlFor="department-values-link"
+                className="flex items-center space-x-2"
+              >
+                <Building className="w-4 h-4" />
+                <span>Ценности департамента</span>
+              </Label>
+              <Input
+                id="department-values-link"
+                type="url"
+                value={departmentValuesLink}
+                onChange={(e) => setDepartmentValuesLink(e.target.value)}
+              />
             </div>
             <div className="space-y-2">
-                <Label htmlFor="employee-portrait-link" className="flex items-center space-x-2"><UserCheck className="w-4 h-4" /><span>Портрет сотрудника</span></Label>
-                <Input id="employee-portrait-link" type="url" value={employeePortraitLink} onChange={(e) => setEmployeePortraitLink(e.target.value)} />
+              <Label
+                htmlFor="employee-portrait-link"
+                className="flex items-center space-x-2"
+              >
+                <UserCheck className="w-4 h-4" />
+                <span>Портрет сотрудника</span>
+              </Label>
+              <Input
+                id="employee-portrait-link"
+                type="url"
+                value={employeePortraitLink}
+                onChange={(e) => setEmployeePortraitLink(e.target.value)}
+              />
             </div>
             <div className="space-y-2">
-                <Label htmlFor="job-requirements-link" className="flex items-center space-x-2"><ClipboardList className="w-4 h-4" /><span>Требования к вакансии</span></Label>
-                <Input id="job-requirements-link" type="url" value={jobRequirementsLink} onChange={(e) => setJobRequirementsLink(e.target.value)} />
+              <Label
+                htmlFor="job-requirements-link"
+                className="flex items-center space-x-2"
+              >
+                <ClipboardList className="w-4 h-4" />
+                <span>Требования к вакансии</span>
+              </Label>
+              <Input
+                id="job-requirements-link"
+                type="url"
+                value={jobRequirementsLink}
+                onChange={(e) => setJobRequirementsLink(e.target.value)}
+              />
             </div>
           </CardContent>
         </Card>
       </div>
 
       <div className="text-center pt-4">
-        <Button onClick={handleAnalyzeInterview} disabled={!cvFile || !videoLink || isProcessing} className="bg-gradient-primary hover:shadow-glow transition-all duration-300 px-8 py-6 text-lg" size="lg">
+        <Button
+          onClick={handleAnalyzeInterview}
+          disabled={!cvFile || !videoLink || isProcessing}
+          className="bg-gradient-primary hover:shadow-glow transition-all duration-300 px-8 py-6 text-lg"
+          size="lg"
+        >
           {isProcessing ? (
-            <><Brain className="w-6 h-6 mr-3 animate-spin" /><span>Обработка...</span></>
+            <>
+              <Brain className="w-6 h-6 mr-3 animate-spin" />
+              <span>Обработка...</span>
+            </>
           ) : (
-            <><Brain className="w-6 h-6 mr-3" /><span>Запустить AI-анализ</span></>
+            <>
+              <Brain className="w-6 h-6 mr-3" />
+              <span>Запустить AI-анализ</span>
+            </>
           )}
         </Button>
       </div>
 
       <>
-        {isProcessing && !analysisResults && (
+        {isProcessing && (
           <div className="text-center py-10">
-              <p>Идет анализ... Это может занять несколько минут.</p>
-              <Progress value={50} className="w-1-2 mx-auto mt-4 animate-pulse" />
+            <p>Идет анализ... Это может занять несколько минут.</p>
+            <Progress value={50} className="w-1-2 mx-auto mt-4 animate-pulse" />
           </div>
         )}
 
-        {analysisResults && analysisResults.report && (
+        {cachedData && !isProcessing && (
           <div className="p-6 border rounded-lg mt-6 bg-white shadow-sm font-sans">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold">
-                Фидбек на кандидата {analysisResults.report.candidate_info.full_name}
+                Фидбек на кандидата{" "}
+                {cachedData.report.candidate_info.full_name}
               </h2>
               <Button onClick={handleExportPdf} disabled={isExporting}>
-                {isExporting ? 'Экспорт...' : <><Download className="w-4 h-4 mr-2" /> Скачать PDF</>}
+                {isExporting ? (
+                  "Экспорт..."
+                ) : (
+                  <>
+                    <Download className="w-4 h-4 mr-2" /> Скачать PDF
+                  </>
+                )}
               </Button>
             </div>
             <div className="space-y-3 text-sm text-gray-800">
-              <p><b>AI-generated summary:</b> {analysisResults.report.ai_summary}</p>
+              <p>
+                <b>AI-generated summary:</b> {cachedData.report.ai_summary}
+              </p>
 
-              <h3 className="text-base font-bold pt-2">1. Информация о кандидате</h3>
+              <h3 className="text-base font-bold pt-2">
+                1. Информация о кандидате
+              </h3>
               <div className="pl-4">
                 <p className="font-semibold">1.1 Опыт</p>
                 <div className="pl-4 space-y-1">
-                    <p>• <b>Количество лет опыта:</b> {analysisResults.report.candidate_info.experience_years}</p>
-                    <p>• <b>Стеки технологий:</b> {analysisResults.report.candidate_info.tech_stack.join(', ')}</p>
-                    <p>• <b>Проекты:</b> {analysisResults.report.candidate_info.projects.join(', ')}</p>
-                    <p>• <b>Домены:</b> {analysisResults.report.candidate_info.domains.join(', ')}</p>
-                    <p>• <b>Задачи, которые выполнял(а) на предыдущих проектах:</b> {analysisResults.report.candidate_info.tasks.join(', ')}</p>
+                  <p>
+                    • <b>Количество лет опыта:</b>{" "}
+                    {cachedData.report.candidate_info.experience_years}
+                  </p>
+                  <p>
+                    • <b>Стеки технологий:</b>{" "}
+                    {cachedData.report.candidate_info.tech_stack.join(
+                      ", "
+                    )}
+                  </p>
+                  <p>
+                    • <b>Проекты:</b>{" "}
+                    {cachedData.report.candidate_info.projects.join(
+                      ", "
+                    )}
+                  </p>
+                  <p>
+                    • <b>Домены:</b>{" "}
+                    {cachedData.report.candidate_info.domains.join(", ")}
+                  </p>
+                  <p>
+                    • <b>
+                      Задачи, которые выполнял(а) на предыдущих проектах:
+                    </b>{" "}
+                    {cachedData.report.candidate_info.tasks.join(", ")}
+                  </p>
                 </div>
 
                 <p className="font-semibold mt-2">1.2 Технические знания</p>
                 <div className="pl-4 space-y-1">
-                    <p>• <b>Темы, которые затрагивались на собеседовании:</b> {analysisResults.report.interview_analysis.topics.join(', ')}</p>
-                    <p>• <b>Тех задание:</b> {analysisResults.report.interview_analysis.tech_assignment}</p>
-                    <p>• <b>Оценка знаний по этим темам:</b> {analysisResults.report.interview_analysis.knowledge_assessment}</p>
+                  <p>
+                    • <b>Темы, которые затрагивались на собеседовании:</b>{" "}
+                    {cachedData.report.interview_analysis.topics.join(
+                      ", "
+                    )}
+                  </p>
+                  <p>
+                    • <b>Тех задание:</b>{" "}
+                    {cachedData.report.interview_analysis.tech_assignment}
+                  </p>
+                  <p>
+                    • <b>Оценка знаний по этим темам:</b>{" "}
+                    {
+                      cachedData.report.interview_analysis
+                        .knowledge_assessment
+                    }
+                  </p>
                 </div>
 
-                <p className="font-semibold mt-2">1.3 Коммуникационные навыки</p>
+                <p className="font-semibold mt-2">
+                  1.3 Коммуникационные навыки
+                </p>
                 <div className="pl-4 space-y-1">
-                    <p>• <b>Оценка коммуникационных навыков:</b> {analysisResults.report.communication_skills.assessment}</p>
+                  <p>
+                    • <b>Оценка коммуникационных навыков:</b>{" "}
+                    {cachedData.report.communication_skills.assessment}
+                  </p>
                 </div>
 
                 <p className="font-semibold mt-2">1.4 Иностранные языки</p>
                 <div className="pl-4 space-y-1">
-                  <p>• <b>Уровень владения иностранными языками:</b> {analysisResults.report.foreign_languages.assessment}</p>
+                  <p>
+                    • <b>Уровень владения иностранными языками:</b>{" "}
+                    {cachedData.report.foreign_languages.assessment}
+                  </p>
                 </div>
               </div>
 
-              <h3 className="text-base font-bold pt-2">2. Соответствие команде</h3>
-              <p><b>Насколько кандидат соответствует ценностям и взглядам команды:</b> {analysisResults.report.team_fit}</p>
+              <h3 className="text-base font-bold pt-2">
+                2. Соответствие команде
+              </h3>
+              <p>
+                <b>
+                  Насколько кандидат соответствует ценностям и взглядам команды:
+                </b>{" "}
+                {cachedData.report.team_fit}
+              </p>
 
-              <h3 className="text-base font-bold pt-2">3. Дополнительная информация</h3>
+              <h3 className="text-base font-bold pt-2">
+                3. Дополнительная информация
+              </h3>
               <div className="pl-4 space-y-1">
-                {analysisResults.report.additional_information.length > 0 ? (
-                  analysisResults.report.additional_information.map((info: string, i: number) => <p key={i}>○ {info}</p>)
+                {cachedData.report.additional_information.length > 0 ? (
+                  cachedData.report.additional_information.map(
+                    (info: string, i: number) => <p key={i}>○ {info}</p>
+                  )
                 ) : (
                   <p className="italic">Нет.</p>
                 )}
@@ -320,19 +764,31 @@ export default function InterviewResults() {
 
               <h3 className="text-base font-bold pt-2">4. Заключение</h3>
               <div className="pl-4 space-y-1">
-                <p>1. {analysisResults.report.conclusion.recommendation}</p>
-                <p>2. По уровню знаний оцениваем его на уровень {analysisResults.report.conclusion.assessed_level}</p>
-                <p>3. {analysisResults.report.conclusion.summary}</p>
+                <p>1. {cachedData.report.conclusion.recommendation}</p>
+                <p>
+                  2. По уровню знаний оцениваем его на уровень{" "}
+                  {cachedData.report.conclusion.assessed_level}
+                </p>
+                <p>3. {cachedData.report.conclusion.summary}</p>
               </div>
 
-              <h3 className="text-base font-bold pt-2">5. Рекомендации для кандидата</h3>
-                {analysisResults.report.recommendations_for_candidate.length > 0 ? (
-                    <ul className="pl-4 list-disc list-inside space-y-1">
-                        {analysisResults.report.recommendations_for_candidate.map((rec: string, i: number) => <li key={i}>{rec}</li>)}
-                    </ul>
-                ) : (
-                    <p className="pl-4 text-gray-500 italic">Рекомендации не сгенерированы.</p>
-                )}
+              <h3 className="text-base font-bold pt-2">
+                5. Рекомендации для кандидата
+              </h3>
+              {cachedData.report.recommendations_for_candidate.length >
+              0 ? (
+                <ul className="pl-4 list-disc list-inside space-y-1">
+                  {cachedData.report.recommendations_for_candidate.map(
+                    (rec: string, i: number) => (
+                      <li key={i}>{rec}</li>
+                    )
+                  )}
+                </ul>
+              ) : (
+                <p className="pl-4 text-gray-500 italic">
+                  Рекомендации не сгенерированы.
+                </p>
+              )}
             </div>
           </div>
         )}

@@ -13,13 +13,14 @@ app = FastAPI(
 )
 
 origins = [
+    "https://ai-hiring-tool-frontend-1053066596162.europe-west1.run.app",
     "http://localhost:8080",
     "http://127.0.0.1:8080",
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -33,3 +34,7 @@ app.include_router(results.router, prefix="/api/results", tags=["Interview Resul
 def read_root():
     logger.info("Root endpoint was hit.")
     return {"status": f"{settings.app_name} is running"}
+
+@app.get("/version")
+def get_version():
+    return {"version": "1.1-cors-fix-check"}
