@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Brain, FileText, Video } from "lucide-react";
 import InterviewPreparation from "./InterviewPreparation";
@@ -10,8 +16,111 @@ interface DashboardProps {
   onLogout: () => void;
 }
 
+interface MatchingItem {
+  criterion: string;
+  match: string;
+  comment: string;
+}
+
+interface Conclusion {
+  summary: string;
+  recommendations: string;
+  interview_topics: string[];
+  values_assessment: string;
+}
+
+interface Report {
+  first_name: string | null;
+  last_name: string | null;
+  matching_table: MatchingItem[];
+  candidate_profile: string;
+  conclusion: Conclusion;
+}
+
+interface PreparationAnalysisResponse {
+  message: string;
+  success: boolean;
+  report: Report;
+}
+
+interface CandidateInfo {
+  full_name: string;
+  experience_years: string;
+  tech_stack: string[];
+  projects: string[];
+  domains: string[];
+  tasks: string[];
+}
+
+interface InterviewAnalysis {
+  topics: string[];
+  tech_assignment: string;
+  knowledge_assessment: string;
+}
+
+interface CommunicationSkills {
+  assessment: string;
+}
+
+interface ForeignLanguages {
+  assessment: string;
+}
+
+interface FinalConclusion {
+  recommendation: string;
+  assessed_level: string;
+  summary: string;
+}
+
+interface FullReport {
+  ai_summary: string;
+  candidate_info: CandidateInfo;
+  interview_analysis: InterviewAnalysis;
+  communication_skills: CommunicationSkills;
+  foreign_languages: ForeignLanguages;
+  team_fit: string;
+  additional_information: string[];
+  conclusion: FinalConclusion;
+  recommendations_for_candidate: string[];
+}
+
+interface ResultsAnalysisResponse {
+  message: string;
+  success: boolean;
+  report: FullReport;
+}
+
+interface CacheData {
+  preparation?: PreparationAnalysisResponse;
+  results?: ResultsAnalysisResponse;
+}
+
+interface LoadingStatus {
+  preparation: boolean;
+  results: boolean;
+}
+
 export default function Dashboard({ onLogout }: DashboardProps) {
   const [activeTab, setActiveTab] = useState("preparation");
+  const [cache, setCache] = useState<CacheData>({});
+  const [loadingStatus, setLoadingStatus] = useState<LoadingStatus>({
+    preparation: false,
+    results: false,
+  });
+
+  const updateCache = (tab: "preparation" | "results", data: any) => {
+    setCache((prevCache) => ({
+      ...prevCache,
+      [tab]: data,
+    }));
+  };
+
+  const setLoading = (tab: "preparation" | "results", status: boolean) => {
+    setLoadingStatus((prevStatus) => ({
+      ...prevStatus,
+      [tab]: status,
+    }));
+  };
 
   return (
     <div className="min-h-screen bg-gradient-subtle">
@@ -26,7 +135,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
               InterviewAI
             </h1>
           </div>
-          
+
           <Button variant="ghost" size="sm" onClick={onLogout}>
             Back to Home
           </Button>
@@ -36,21 +145,34 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
         <div className="mb-8">
-          <h2 className="text-3xl font-bold mb-2">Interview Analysis Platform</h2>
+          <h2 className="text-3xl font-bold mb-2">
+            Interview Analysis Platform
+          </h2>
           <p className="text-muted-foreground">
-            Prepare for interviews and analyze candidate performance with AI-powered insights
+            Prepare for interviews and analyze candidate performance with
+            AI-powered insights
           </p>
         </div>
 
         <Card className="shadow-elegant bg-gradient-card border-0">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <Tabs
+            value={activeTab}
+            onValueChange={setActiveTab}
+            className="w-full"
+          >
             <CardHeader>
               <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="preparation" className="flex items-center space-x-2">
+                <TabsTrigger
+                  value="preparation"
+                  className="flex items-center space-x-2"
+                >
                   <FileText className="w-4 h-4" />
                   <span>Interview Preparation</span>
                 </TabsTrigger>
-                <TabsTrigger value="results" className="flex items-center space-x-2">
+                <TabsTrigger
+                  value="results"
+                  className="flex items-center space-x-2"
+                >
                   <Video className="w-4 h-4" />
                   <span>Interview Results</span>
                 </TabsTrigger>
@@ -59,11 +181,21 @@ export default function Dashboard({ onLogout }: DashboardProps) {
 
             <CardContent>
               <TabsContent value="preparation" className="mt-0">
-                <InterviewPreparation />
+                <InterviewPreparation
+                  cachedData={cache.preparation}
+                  updateCache={(data) => updateCache("preparation", data)}
+                  isLoading={loadingStatus.preparation}
+                  setIsLoading={(status) => setLoading("preparation", status)}
+                />
               </TabsContent>
-              
+
               <TabsContent value="results" className="mt-0">
-                <InterviewResults />
+                <InterviewResults
+                  cachedData={cache.results}
+                  updateCache={(data) => updateCache("results", data)}
+                  isProcessing={loadingStatus.results}
+                  setIsProcessing={(status) => setLoading("results", status)}
+                />
               </TabsContent>
             </CardContent>
           </Tabs>
