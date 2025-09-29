@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -80,6 +80,7 @@ interface InterviewResultsProps {
   setIsProcessing: (status: boolean) => void;
 }
 
+
 const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
   let binary = "";
   const bytes = new Uint8Array(buffer);
@@ -147,13 +148,10 @@ export default function InterviewResults({
   };
 
   const handleAnalyzeInterview = async () => {
-    if (!cvFile || !videoLink) {
-      alert("Пожалуйста, загрузите CV и укажите ссылку на видеозапись.");
+    if (!videoLink) {
+      alert("Пожалуйста, укажите ссылку на видеозапись.");
       return;
     }
-
-    const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-    const endpoint = `${API_BASE_URL}/api/results/`;
 
     setIsProcessing(true);
     updateCache(undefined);
@@ -161,14 +159,16 @@ export default function InterviewResults({
 
     try {
       const form = new FormData();
-      form.append("cv_file", cvFile);
+      if (cvFile) {
+        form.append("cv_file", cvFile);
+      }
       form.append("video_link", videoLink);
       form.append("competency_matrix_link", competencyMatrixLink);
       form.append("department_values_link", departmentValuesLink);
       form.append("employee_portrait_link", employeePortraitLink);
       form.append("job_requirements_link", jobRequirementsLink);
 
-      const res = await fetch(endpoint, {
+      const res = await fetch("http://localhost:8000/api/results/", {
         method: "POST",
         body: form,
       });
@@ -180,17 +180,20 @@ export default function InterviewResults({
           const errorData = JSON.parse(rawResponseText);
           throw new Error(errorData.detail || "Analyze failed");
         } catch {
-          throw new Error(rawResponseText || `Server returned status ${res.status}`);
+          throw new Error(
+            rawResponseText || `Server returned status ${res.status}`
+          );
         }
       }
 
       const data = JSON.parse(rawResponseText);
-      updateCache(data)
-
+      updateCache(data);
     } catch (err: any) {
       console.error("Ошибка обработки ответа от сервера:", err);
       console.error("Сырой ответ от сервера (Raw response):", rawResponseText);
-      alert(`Произошла ошибка: ${err.message}. Подробности смотрите в консоли разработчика (F12).`);
+      alert(
+        `Произошла ошибка: ${err.message}. Подробности смотрите в консоли разработчика (F12).`
+      );
     } finally {
       setIsProcessing(false);
     }
@@ -469,7 +472,7 @@ export default function InterviewResults({
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <BookUser className="w-5 h-5 text-primary" />
-              <span>CV Кандидата</span>
+              <span>CV Кандидата (Опционально)</span>
             </CardTitle>
             <CardDescription>
               Перетащите файл или нажмите на область для загрузки .txt, .pdf,
@@ -489,12 +492,12 @@ export default function InterviewResults({
             >
               <input
                 type="file"
-                id="cv-upload"
+                id="cv-upload-results"
                 accept=".pdf,.docx, .txt"
                 onChange={handleFileChange}
                 className="hidden"
               />
-              <label htmlFor="cv-upload" className="cursor-pointer">
+              <label htmlFor="cv-upload-results" className="cursor-pointer">
                 <Upload className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
                 <p className="text-sm text-muted-foreground mb-2">
                   {cvFile
@@ -617,7 +620,7 @@ export default function InterviewResults({
       <div className="text-center pt-4">
         <Button
           onClick={handleAnalyzeInterview}
-          disabled={!cvFile || !videoLink || isProcessing}
+          disabled={!videoLink || isProcessing}
           className="bg-gradient-primary hover:shadow-glow transition-all duration-300 px-8 py-6 text-lg"
           size="lg"
         >

@@ -2,6 +2,8 @@ import os
 import json
 import io
 import asyncio
+import base64
+from typing import Optional
 from loguru import logger
 
 from backend.api.models import PreparationAnalysis, ResultsAnalysis, FullReport
@@ -38,22 +40,24 @@ class AnalysisService:
         self.request_counter = 0
         self.session_total_tokens = 0
         try:
-            credentials_path = settings.google_credentials_path
-            if os.path.exists(credentials_path):
-                creds = service_account.Credentials.from_service_account_file(credentials_path)
-                scoped_credentials = creds.with_scopes(['https://www.googleapis.com/auth/drive'])
-                http_client_with_timeout = httplib2.Http(timeout=900)
-                authed_http = AuthorizedHttp(scoped_credentials, http=http_client_with_timeout)
-                self.drive_service = build(
-                    'drive',
-                    'v3',
-                    http=authed_http,
-                    cache_discovery=False
-                )
+            credentials_b64 = settings.google_application_b64
+            credentials_json_str = base64.b64decode(credentials_b64).decode('utf-8')
+            credentials_info = json.loads(credentials_json_str)
 
-                logger.success("Клиент Google Drive API успешно инициализирован.")
-            else:
-                logger.error(f"Файл учетных данных Google не найден по пути: {credentials_path}")
+            creds = service_account.Credentials.from_service_account_info(credentials_info)
+            scoped_credentials = creds.with_scopes(['https://www.googleapis.com/auth/drive'])
+
+            http_client_with_timeout = httplib2.Http(timeout=900)
+
+            authed_http = AuthorizedHttp(scoped_credentials, http=http_client_with_timeout)
+            self.drive_service = build(
+                'drive',
+                'v3',
+                http=authed_http,
+                cache_discovery=False
+            )
+
+            logger.success("Клиент Google Drive API успешно инициализирован.")
         except Exception as e:
             logger.error(f"Ошибка инициализации клиента Google Drive API: {e}", exc_info=True)
 
@@ -154,8 +158,8 @@ class AnalysisService:
 
     async def analyze_results(
             self,
-            cv_file: io.BytesIO,
-            cv_filename: str,
+            cv_file: Optional[io.BytesIO],
+            cv_filename: Optional[str],
             video_link: str,
             competency_matrix_link: str,
             department_values_link: str,
@@ -177,7 +181,10 @@ class AnalysisService:
                 if not transcription_text:
                     raise ValueError("Транскрипция не вернула текст. Видео может быть без звука или слишком коротким.")
 
-                cv_text = fp.read_file_content(cv_file, cv_filename)
+                if cv_file and cv_filename:
+                    cv_text = fp.read_file_content(cv_file, cv_filename)
+                else:
+                    cv_text = "CV не был предоставлен."
 
                 logger.info("Загрузка текстовых артефактов из Google Drive...")
                 links = {
@@ -204,13 +211,16 @@ class AnalysisService:
                 await session_service.create_session(app_name=settings.app_name, user_id=user_id, session_id=session_id)
 
                 logger.info("🚀 Запуск agent_4_topic_extractor...")
-                runner_4 = Runner(agent=agent_4_topic_extractor, app_name=settings.app_name, session_service=session_service)
+                runner_4 = Runner(agent=agent_4_topic_extractor, app_name=settings.app_name,
+                                  session_service=session_service)
                 message_for_agent_4 = types.Content(role="user", parts=[types.Part(text=transcription_text)])
                 agent_4_output = ""
-                async for event in runner_4.run_async(session_id=session_id, user_id=user_id, new_message=message_for_agent_4):
+                async for event in runner_4.run_async(session_id=session_id, user_id=user_id,
+                                                      new_message=message_for_agent_4):
                     if event.usage_metadata:
                         pipeline_tokens_used += event.usage_metadata.total_token_count
-                        logger.info(f"Токены (Агент 4): Вход={event.usage_metadata.prompt_token_count}, Выход={event.usage_metadata.candidates_token_count}, Всего={event.usage_metadata.total_token_count}")
+                        logger.info(
+                            f"Токены (Агент 4): Вход={event.usage_metadata.prompt_token_count}, Выход={event.usage_metadata.candidates_token_count}, Всего={event.usage_metadata.total_token_count}")
                     if event.content and event.content.parts:
                         agent_4_output += "".join(part.text for part in event.content.parts if part.text)
 
@@ -229,10 +239,12 @@ class AnalysisService:
                                   session_service=session_service)
                 message_for_agent_5 = types.Content(role="user", parts=[types.Part(text=combined_input_for_agent_5)])
                 agent_5_output = ""
-                async for event in runner_5.run_async(session_id=session_id, user_id=user_id, new_message=message_for_agent_5):
+                async for event in runner_5.run_async(session_id=session_id, user_id=user_id,
+                                                      new_message=message_for_agent_5):
                     if event.usage_metadata:
                         pipeline_tokens_used += event.usage_metadata.total_token_count
-                        logger.info(f"Токены (Агент 5): Вход={event.usage_metadata.prompt_token_count}, Выход={event.usage_metadata.candidates_token_count}, Всего={event.usage_metadata.total_token_count}")
+                        logger.info(
+                            f"Токены (Агент 5): Вход={event.usage_metadata.prompt_token_count}, Выход={event.usage_metadata.candidates_token_count}, Всего={event.usage_metadata.total_token_count}")
                     if event.content and event.content.parts:
                         agent_5_output += "".join(part.text for part in event.content.parts if part.text)
 
@@ -275,7 +287,6 @@ class AnalysisService:
                     logger.error(f"Проблемный JSON от Агента 5: {agent_5_output}")
                     raise ValueError("AI-сервис вернул некорректный формат данных.")
             finally:
-                # Этот блок выполнится всегда: и после успеха, и после ошибки
                 if temp_audio_path and os.path.exists(temp_audio_path):
                     os.remove(temp_audio_path)
                     logger.info(f"Временный файл {temp_audio_path} удален.")
