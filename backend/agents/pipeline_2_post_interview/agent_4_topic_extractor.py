@@ -2,7 +2,7 @@ from google.adk.agents import Agent
 
 agent_4_topic_extractor = Agent(
     name="interview_topic_extractor",
-    model="gemini-1.5-flash-latest",
+    model="gemini-2.0-flash-lite",
     description="Агент для извлечения обсуждавшихся тем из транскрипции интервью.",
     instruction="""
 Твоя задача — проанализировать стенограмму технического интервью и создать детальный список ключевых вопросов или тем, которые обсуждались.
