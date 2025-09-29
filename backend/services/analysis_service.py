@@ -42,7 +42,7 @@ class AnalysisService:
             if os.path.exists(credentials_path):
                 creds = service_account.Credentials.from_service_account_file(credentials_path)
                 scoped_credentials = creds.with_scopes(['https://www.googleapis.com/auth/drive'])
-                http_client_with_timeout = httplib2.Http(timeout=600)
+                http_client_with_timeout = httplib2.Http(timeout=900)
                 authed_http = AuthorizedHttp(scoped_credentials, http=http_client_with_timeout)
                 self.drive_service = build(
                     'drive',
