@@ -38,7 +38,7 @@ class AnalysisService:
         self.request_counter = 0
         self.session_total_tokens = 0
         try:
-            credentials_path = settings.google_application_b64
+            credentials_path = settings.google_credentials_path
             if os.path.exists(credentials_path):
                 creds = service_account.Credentials.from_service_account_file(credentials_path)
                 scoped_credentials = creds.with_scopes(['https://www.googleapis.com/auth/drive'])

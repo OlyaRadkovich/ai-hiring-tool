@@ -22,6 +22,8 @@ class Settings(BaseSettings):
 
     google_application_b64: str
 
+    google_credentials_path: str | None = None
+
     @model_validator(mode='after')
     def generate_credentials_file(self) -> 'Settings':
         if self.google_application_b64:
@@ -29,6 +31,7 @@ class Settings(BaseSettings):
             with tempfile.NamedTemporaryFile(delete=False, suffix='.json') as temp_file:
                 temp_file.write(decoded_bytes)
                 os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = temp_file.name
+                self.google_credentials_path = temp_file.name
                 
         return self
 
