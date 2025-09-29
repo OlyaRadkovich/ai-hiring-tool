@@ -2,7 +2,7 @@ from google.adk.agents import Agent
 
 agent_2_grader = Agent(
     name="matching_and_profiling_agent",
-    model="gemini-1.5-flash-latest",
+    model="gemini-2.0-flash-lite",
     description="Агент для сравнения данных кандидата с требованиями вакансии и формирования его профиля.",
     instruction="""
     Ты — опытный тимлиод. Твоя задача — взять существующий JSON с информацией о кандидате и требованиях, добавить в него свою экспертную оценку и вернуть объединенный JSON.

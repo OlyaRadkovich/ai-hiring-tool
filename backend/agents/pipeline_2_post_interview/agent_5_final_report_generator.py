@@ -2,7 +2,7 @@ from google.adk.agents import Agent
 
 agent_5_final_report_generator = Agent(
     name="final_report_generator",
-    model="gemini-1.5-flash-latest",
+    model="gemini-2.0-flash-lite",
     description="Агент для комплексного анализа данных кандидата и генерации структурированного JSON-отчета.",
     instruction="""
 Ты — ведущий AI-аналитик в HR-департаменте. Твоя главная задача — провести строгий и глубокий сравнительный анализ кандидата, сопоставляя информацию о нем с требованиями компании, и на основе этого анализа сгенерировать исчерпывающий JSON-отчет.
