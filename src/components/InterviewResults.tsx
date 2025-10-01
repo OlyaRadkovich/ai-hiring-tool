@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import { toast } from "./ui/use-toast";
 
 interface CandidateInfo {
   full_name: string;
@@ -34,27 +35,22 @@ interface CandidateInfo {
   domains: string[];
   tasks: string[];
 }
-
 interface InterviewAnalysis {
   topics: string[];
   tech_assignment: string;
   knowledge_assessment: string;
 }
-
 interface CommunicationSkills {
   assessment: string;
 }
-
 interface ForeignLanguages {
   assessment: string;
 }
-
 interface FinalConclusion {
   recommendation: string;
   assessed_level: string;
   summary: string;
 }
-
 interface FullReport {
   ai_summary: string;
   candidate_info: CandidateInfo;
@@ -110,9 +106,10 @@ export default function InterviewResults({
   const [jobRequirementsLink, setJobRequirementsLink] = useState(
     "https://docs.google.com/spreadsheets/d/1JOYzYmAtaPzHHuN2CvdrCXn_L30bBNlikJ5K0mRt-HE/edit?usp=drive_link"
   );
-
   const [isExporting, setIsExporting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+
+  const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -147,52 +144,52 @@ export default function InterviewResults({
   };
 
   const handleAnalyzeInterview = async () => {
-    if (!cvFile || !videoLink) {
-      alert("Пожалуйста, загрузите CV и укажите ссылку на видеозапись.");
-      return;
+    if (!videoLink) {
+        toast({
+            title: "Ошибка ввода",
+            description: "Пожалуйста, укажите ссылку на видео.",
+            variant: "destructive",
+        });
+        return;
     }
-
-    const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-    const endpoint = `${API_BASE_URL}/api/results/`;
 
     setIsProcessing(true);
     updateCache(undefined);
-    let rawResponseText = "";
 
     try {
-      const form = new FormData();
-      form.append("cv_file", cvFile);
-      form.append("video_link", videoLink);
-      form.append("competency_matrix_link", competencyMatrixLink);
-      form.append("department_values_link", departmentValuesLink);
-      form.append("employee_portrait_link", employeePortraitLink);
-      form.append("job_requirements_link", jobRequirementsLink);
-
-      const res = await fetch(endpoint, {
-        method: "POST",
-        body: form,
-      });
-
-      rawResponseText = await res.text();
-
-      if (!res.ok) {
-        try {
-          const errorData = JSON.parse(rawResponseText);
-          throw new Error(errorData.detail || "Analyze failed");
-        } catch {
-          throw new Error(rawResponseText || `Server returned status ${res.status}`);
+        const form = new FormData();
+        if (cvFile) {
+            form.append("cv_file", cvFile);
         }
-      }
+        form.append("video_link", videoLink);
+        form.append("competency_matrix_link", competencyMatrixLink);
+        form.append("department_values_link", departmentValuesLink);
+        form.append("employee_portrait_link", employeePortraitLink);
+        form.append("job_requirements_link", jobRequirementsLink);
 
-      const data = JSON.parse(rawResponseText);
-      updateCache(data)
+        const res = await fetch(`${API_BASE_URL}/api/results/`, {
+            method: "POST",
+            body: form,
+        });
 
+        const data = await res.json();
+
+        if (!res.ok) {
+            throw new Error(data.detail || "Не удалось запустить задачу анализа.");
+        }
+
+        toast({
+            title: "Задача принята",
+            description: "Анализ запущен. Вы будете уведомлены о завершении.",
+        });
+        startAnalysisTask(data.task_id);
     } catch (err: any) {
-      console.error("Ошибка обработки ответа от сервера:", err);
-      console.error("Сырой ответ от сервера (Raw response):", rawResponseText);
-      alert(`Произошла ошибка: ${err.message}. Подробности смотрите в консоли разработчика (F12).`);
-    } finally {
-      setIsProcessing(false);
+        toast({
+            title: "Ошибка",
+            description: err.message,
+            variant: "destructive",
+        });
+        setIsProcessing(false);
     }
   };
 
@@ -469,12 +466,8 @@ export default function InterviewResults({
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <BookUser className="w-5 h-5 text-primary" />
-              <span>CV Кандидата</span>
+              <span>CV Кандидата (Опционально)</span>
             </CardTitle>
-            <CardDescription>
-              Перетащите файл или нажмите на область для загрузки .txt, .pdf,
-              .docx
-            </CardDescription>
           </CardHeader>
           <CardContent>
             <div
@@ -489,17 +482,17 @@ export default function InterviewResults({
             >
               <input
                 type="file"
-                id="cv-upload"
+                id="cv-upload-results"
                 accept=".pdf,.docx, .txt"
                 onChange={handleFileChange}
                 className="hidden"
               />
-              <label htmlFor="cv-upload" className="cursor-pointer">
+              <label htmlFor="cv-upload-results" className="cursor-pointer">
                 <Upload className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
                 <p className="text-sm text-muted-foreground mb-2">
                   {cvFile
                     ? cvFile.name
-                    : "Нажмите или перетащите файл для загрузки"}
+                    : "Нажмите или перетащите файл для загрузки (.txt, .pdf, .docx)"}
                 </p>
               </label>
             </div>
@@ -617,7 +610,7 @@ export default function InterviewResults({
       <div className="text-center pt-4">
         <Button
           onClick={handleAnalyzeInterview}
-          disabled={!cvFile || !videoLink || isProcessing}
+          disabled={!videoLink || isProcessing}
           className="bg-gradient-primary hover:shadow-glow transition-all duration-300 px-8 py-6 text-lg"
           size="lg"
         >

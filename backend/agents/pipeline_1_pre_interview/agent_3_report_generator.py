@@ -2,7 +2,7 @@ from google.adk.agents import Agent
 
 agent_3_report_generator = Agent(
     name="interview_plan_generator",
-    model="gemini-1.5-flash-latest",
+    model="gemini-2.0-flash-lite",
     description="Агент для создания итогового отчета и плана интервью в формате JSON.",
     instruction="""
 Ты — AI-ассистент, твоя задача — на основе JSON-объекта с полным анализом кандидата сгенерировать финальный отчет для интервьюера.

@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Brain, FileText, Video } from "lucide-react";
 import InterviewPreparation from "./InterviewPreparation";
 import InterviewResults from "./InterviewResults";
+import { toast } from "./ui/use-toast";
 
 interface DashboardProps {
   onLogout: () => void;
@@ -153,7 +154,6 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             AI-powered insights
           </p>
         </div>
-
         <Card className="shadow-elegant bg-gradient-card border-0">
           <Tabs
             value={activeTab}
@@ -178,7 +178,6 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                 </TabsTrigger>
               </TabsList>
             </CardHeader>
-
             <CardContent>
               <TabsContent value="preparation" className="mt-0">
                 <InterviewPreparation

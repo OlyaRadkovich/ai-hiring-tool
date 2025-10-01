@@ -30,10 +30,11 @@ app.include_router(prep.router, prefix="/api/prep", tags=["Interview Preparation
 app.include_router(results.router, prefix="/api/results", tags=["Interview Results"])
 
 
-@app.get("/", summary="Проверка состояния", description="Простой эндпоинт для проверки, что сервер запущен.")
+@app.get("/", summary="Health Check", description="A simple endpoint to check if the server is running.")
 def read_root():
     logger.info("Root endpoint was hit.")
     return {"status": f"{settings.app_name} is running"}
+
 
 @app.get("/version")
 def get_version():

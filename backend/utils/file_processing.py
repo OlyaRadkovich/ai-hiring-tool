@@ -21,16 +21,16 @@ def get_google_drive_file_id(link: str) -> str:
         match = re.search(pattern, link)
         if match:
             return match.group(1)
-    raise ValueError("Некорректная ссылка на Google Drive. Не удалось извлечь ID файла.")
+    raise ValueError("Invalid Google Drive link. Could not extract file ID.")
 
 
 async def download_sheet_from_drive(drive_service, file_id: str) -> str:
     """
-    Загружает Google Таблицу как CSV и возвращает ее текстовое содержимое.
+    Downloads a Google Sheet as CSV and returns its text content.
     """
     if not drive_service:
-        raise ConnectionError("Сервис Google Drive не инициализирован.")
-    logger.info(f"Начало загрузки таблицы с ID: {file_id} из Google Drive.")
+        raise ConnectionError("Google Drive service is not initialized.")
+    logger.info(f"Starting download of sheet with ID: {file_id} from Google Drive.")
     try:
         request = drive_service.files().export_media(fileId=file_id, mimeType='text/csv')
         file_io = io.BytesIO()
