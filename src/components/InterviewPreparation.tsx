@@ -21,7 +21,7 @@ import {
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { toast } from "./ui/use-toast";
-import { Brain } from "lucide-react";
+import { Brain, Upload } from "lucide-react";
 import { Progress } from "./ui/progress";
 
 interface MatchingItem {
@@ -93,6 +93,8 @@ const InterviewPreparation: React.FC<InterviewPreparationProps> = ({
     "https://docs.google.com/spreadsheets/d/1JOYzYmAtaPzHHuN2CvdrCXn_L30bBNlikJ5K0mRt-HE/edit?usp=drive_link"
   );
 
+  const [isDragging, setIsDragging] = useState(false);
+
   const handleCvFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) setCvFile(event.target.files[0]);
   };
@@ -158,6 +160,31 @@ const InterviewPreparation: React.FC<InterviewPreparationProps> = ({
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDragging(false);
+    const file = event.dataTransfer.files?.[0];
+    if (
+      file &&
+      (file.type === "application/pdf" ||
+        file.type ===
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+        file.type === "text/plain")
+    ) {
+      setCvFile(file);
     }
   };
 
@@ -318,19 +345,39 @@ const InterviewPreparation: React.FC<InterviewPreparationProps> = ({
         <CardHeader>
           <CardTitle>Оценка кандидата</CardTitle>
           <CardDescription>
-            Загрузите резюме, вставьте фидбэк от рекрутера и при необходимости
+            Загрузите CV, добавьте текст от рекрутера и при необходимости
             измените ссылку на требования для генерации отчета.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid w-full max-w-sm items-center gap-1.5">
-            <Label htmlFor="cv-file">Резюме (.txt, .pdf, .docx)</Label>
-            <Input
-              id="cv-file"
-              type="file"
-              onChange={handleCvFileChange}
-              accept=".txt,.pdf,.docx"
-            />
+          <div>
+            <Label htmlFor="cv-file">CV кандидата в формате .txt, .pdf или .docx</Label>
+            <div
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors mt-1.5 ${
+                isDragging
+                  ? "border-primary bg-primary/10"
+                  : "border-border hover:border-primary/50"
+              }`}
+            >
+              <Input
+                id="cv-file"
+                type="file"
+                onChange={handleCvFileChange}
+                accept=".txt,.pdf,.docx"
+                className="hidden"
+              />
+              <label htmlFor="cv-file" className="cursor-pointer">
+                <Upload className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+                <p className="text-sm text-muted-foreground">
+                  {cvFile
+                    ? cvFile.name
+                    : "Нажмите или перетащите файл для загрузки"}
+                </p>
+              </label>
+            </div>
           </div>
           <div className="grid w-full gap-1.5">
             <Label htmlFor="feedback-text">Фидбек от рекрутера</Label>

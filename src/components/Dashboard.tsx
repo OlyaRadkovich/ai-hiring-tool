@@ -1,9 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -101,6 +100,12 @@ interface LoadingStatus {
   results: boolean;
 }
 
+interface TaskStatusResponse {
+  status: "processing" | "completed" | "failed";
+  result?: ResultsAnalysisResponse;
+  error?: string;
+}
+
 export default function Dashboard({ onLogout }: DashboardProps) {
   const [activeTab, setActiveTab] = useState("preparation");
   const [cache, setCache] = useState<CacheData>({});
@@ -108,6 +113,8 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     preparation: false,
     results: false,
   });
+  const [resultsTaskId, setResultsTaskId] = useState<string | null>(null);
+  const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
   const updateCache = (tab: "preparation" | "results", data: any) => {
     setCache((prevCache) => ({
@@ -123,9 +130,60 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     }));
   };
 
+  useEffect(() => {
+    if (!resultsTaskId || !loadingStatus.results) {
+      return;
+    }
+
+    const intervalId = setInterval(async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/results/${resultsTaskId}/status`);
+        if (!res.ok) {
+          throw new Error(`Failed to fetch task status: ${res.statusText}`);
+        }
+
+        const data: TaskStatusResponse = await res.json();
+
+        if (data.status === "completed") {
+          clearInterval(intervalId);
+          setLoading("results", false);
+          setResultsTaskId(null);
+          if (data.result) {
+            updateCache("results", data.result);
+            toast({
+              title: "Успех",
+              description: "Анализ видео успешно завершен.",
+            });
+          } else {
+            throw new Error("Analysis completed, but no result was returned.");
+          }
+        } else if (data.status === "failed") {
+          clearInterval(intervalId);
+          setLoading("results", false);
+          setResultsTaskId(null);
+          toast({
+            title: "Ошибка анализа",
+            description: data.error || "Произошла неизвестная ошибка.",
+            variant: "destructive",
+          });
+        }
+      } catch (error: any) {
+        clearInterval(intervalId);
+        setLoading("results", false);
+        setResultsTaskId(null);
+        toast({
+          title: "Ошибка сети",
+          description: `Не удалось получить статус задачи: ${error.message}`,
+          variant: "destructive",
+        });
+      }
+    }, 7000);
+
+    return () => clearInterval(intervalId);
+  }, [resultsTaskId, loadingStatus.results, API_BASE_URL]);
+
   return (
     <div className="min-h-screen bg-gradient-subtle">
-      {/* Header */}
       <header className="border-b bg-card/95 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center space-x-3">
@@ -136,14 +194,11 @@ export default function Dashboard({ onLogout }: DashboardProps) {
               InterviewAI
             </h1>
           </div>
-
           <Button variant="ghost" size="sm" onClick={onLogout}>
             Back to Home
           </Button>
         </div>
       </header>
-
-      {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
         <div className="mb-8">
           <h2 className="text-3xl font-bold mb-2">
@@ -187,13 +242,13 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                   setIsLoading={(status) => setLoading("preparation", status)}
                 />
               </TabsContent>
-
               <TabsContent value="results" className="mt-0">
                 <InterviewResults
                   cachedData={cache.results}
                   updateCache={(data) => updateCache("results", data)}
                   isProcessing={loadingStatus.results}
                   setIsProcessing={(status) => setLoading("results", status)}
+                  startAnalysisTask={setResultsTaskId}
                 />
               </TabsContent>
             </CardContent>

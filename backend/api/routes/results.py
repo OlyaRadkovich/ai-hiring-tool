@@ -1,4 +1,5 @@
 import io
+from typing import Optional
 from fastapi import APIRouter, UploadFile, File, Form, status, HTTPException, Depends
 from google.genai.errors import ServerError
 from loguru import logger
@@ -24,7 +25,7 @@ router = APIRouter()
     description="Принимает полный набор данных для генерации развернутого фидбэка по кандидату."
 )
 async def analyze_results_endpoint(
-        cv_file: UploadFile = File(..., description="Резюме кандидата (.pdf, .docx)."),
+        cv_file: Optional[UploadFile] = File(None, description="Резюме кандидата (.pdf, .docx, .txt)."),
         video_link: str = Form(..., description="Ссылка на видеозапись собеседования."),
         competency_matrix_link: str = Form(..., description="Ссылка на матрицу компетенций QA/AQA."),
         department_values_link: str = Form(..., description="Ссылка на ценности департамента."),
@@ -32,15 +33,20 @@ async def analyze_results_endpoint(
         job_requirements_link: str = Form(..., description="Ссылка на требования к вакансии."),
         analysis_service: AnalysisService = Depends(get_analysis_service)
 ):
-    FileValidator.validate_cv_file_results(cv_file)
-
+    """
+    Эндпоинт для анализа результатов интервью.
+    Принимает CV (опционально), ссылку на видео и ссылки на документы с требованиями.
+    """
     try:
-        cv_content_bytes = await cv_file.read()
-        cv_file_like_object = io.BytesIO(cv_content_bytes)
+
+        if cv_file:
+            FileValidator.validate_cv_file_results(cv_file)
+
+        cv_file_content = io.BytesIO(cv_file.file.read()) if cv_file and cv_file.file else None
 
         analysis_result = await analysis_service.analyze_results(
-            cv_file=cv_file_like_object,
-            cv_filename=cv_file.filename,
+            cv_file=cv_file_content,
+            cv_filename=cv_file.filename if cv_file else None,
             video_link=video_link,
             competency_matrix_link=competency_matrix_link,
             department_values_link=department_values_link,
@@ -79,5 +85,5 @@ async def analyze_results_endpoint(
         logger.error(f"Произошла непредвиденная ошибка: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Произошла внутренняя ошибка сервера: {str(e)}"
+            detail=f"Произошла внутренняя ошибка сервера: {e}"
         )

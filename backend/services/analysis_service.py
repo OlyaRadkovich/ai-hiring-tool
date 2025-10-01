@@ -276,22 +276,10 @@ class AnalysisService:
 
                 logger.info("Parsing final JSON response from the agent...")
                 try:
-                    start_index_4 = agent_4_output.find('{')
-                    end_index_4 = agent_4_output.rfind('}')
-                    if start_index_4 != -1 and end_index_4 != -1:
-                        clean_json_str_4 = agent_4_output[start_index_4:end_index_4 + 1]
-                    else:
-                        clean_json_str_4 = agent_4_output
-
+                    clean_json_str_4 = fp.extract_json_from_string(agent_4_output)
                     topics_data = json.loads(clean_json_str_4)
 
-                    start_index_5 = agent_5_output.find('{')
-                    end_index_5 = agent_5_output.rfind('}')
-                    if start_index_5 != -1 and end_index_5 != -1:
-                        clean_json_str_5 = agent_5_output[start_index_5:end_index_5 + 1]
-                    else:
-                        clean_json_str_5 = agent_5_output
-
+                    clean_json_str_5 = fp.extract_json_from_string(agent_5_output)
                     report_data = json.loads(clean_json_str_5)
 
                     if "topics" in topics_data and "interview_analysis" in report_data:
