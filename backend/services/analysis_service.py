@@ -32,9 +32,9 @@ class AnalysisService:
         self.semaphore = asyncio.Semaphore(1)
         if settings.assemblyai_api_key:
             aai.settings.api_key = settings.assemblyai_api_key
-            logger.success("Клиент AssemblyAI сконфигурирован.")
+            logger.success("AssemblyAI client configured.")
         else:
-            logger.warning("API ключ для AssemblyAI не настроен в .env файле!")
+            logger.warning("AssemblyAI API key not configured in .env file!")
 
         self.drive_service = None
         self.request_counter = 0
@@ -57,20 +57,18 @@ class AnalysisService:
                 cache_discovery=False
             )
 
-            logger.success("Клиент Google Drive API успешно инициализирован.")
+            logger.success("Google Drive API client initialized successfully.")
         except Exception as e:
-            logger.error(f"Ошибка инициализации клиента Google Drive API: {e}", exc_info=True)
+            logger.error(f"Error initializing Google Drive API client: {e}", exc_info=True)
 
     def _set_google_api_key(self):
-        """
-        Устанавливает ключ Google API как переменную окружения.
-        """
+        """Sets the Google API key as an environment variable for the current request."""
         api_key_to_use = settings.google_api_key
         if not api_key_to_use:
-            logger.error("Ключ Google API (google_api_key) не найден в .env файле.")
+            logger.error("Google API key (google_api_key) not found in .env file.")
             raise ValueError("Google API key is not provided.")
         os.environ['GOOGLE_API_KEY'] = api_key_to_use
-        logger.info("Ключ Google API установлен как переменная окружения для текущего запроса.")
+        logger.info("Google API key set as an environment variable for the current request.")
 
     async def analyze_preparation(
             self,
@@ -80,7 +78,7 @@ class AnalysisService:
             requirements_link: str
     ) -> PreparationAnalysis:
         async with self.semaphore:
-            logger.info("Начало процесса оценки кандидата (Пайплайн 1)...")
+            logger.info("Starting candidate evaluation process (Pipeline 1)...")
             pipeline_tokens_used = 0
 
             self._set_google_api_key()
@@ -95,7 +93,7 @@ class AnalysisService:
             user_id = "prep_user"
             await session_service.create_session(app_name=settings.app_name, user_id=user_id, session_id=session_id)
 
-            logger.info("🚀 Запуск agent_1_data_parser...")
+            logger.info("🚀 Running agent_1_data_parser...")
             runner_1 = Runner(agent=agent_1_data_parser, app_name=settings.app_name, session_service=session_service)
             message_for_agent_1 = types.Content(
                 role="user",
@@ -106,40 +104,47 @@ class AnalysisService:
                 ]
             )
             agent_1_output = ""
-            async for event in runner_1.run_async(session_id=session_id, user_id=user_id, new_message=message_for_agent_1):
+            async for event in runner_1.run_async(session_id=session_id, user_id=user_id,
+                                                  new_message=message_for_agent_1):
                 if event.usage_metadata:
                     pipeline_tokens_used += event.usage_metadata.total_token_count
-                    logger.info(f"Токены (Агент 1): Вход={event.usage_metadata.prompt_token_count}, Выход={event.usage_metadata.candidates_token_count}, Всего={event.usage_metadata.total_token_count}")
+                    logger.info(
+                        f"Tokens (Agent 1): Input={event.usage_metadata.prompt_token_count}, Output={event.usage_metadata.candidates_token_count}, Total={event.usage_metadata.total_token_count}")
                 if event.content and event.content.parts:
                     agent_1_output += "".join(part.text for part in event.content.parts if part.text)
 
-            logger.info("🚀 Запуск agent_2_grader...")
+            logger.info("🚀 Running agent_2_grader...")
             runner_2 = Runner(agent=agent_2_grader, app_name=settings.app_name, session_service=session_service)
             message_for_agent_2 = types.Content(role="user", parts=[types.Part(text=agent_1_output)])
             agent_2_output = ""
-            async for event in runner_2.run_async(session_id=session_id, user_id=user_id, new_message=message_for_agent_2):
+            async for event in runner_2.run_async(session_id=session_id, user_id=user_id,
+                                                  new_message=message_for_agent_2):
                 if event.usage_metadata:
                     pipeline_tokens_used += event.usage_metadata.total_token_count
-                    logger.info(f"Токены (Агент 2): Вход={event.usage_metadata.prompt_token_count}, Выход={event.usage_metadata.candidates_token_count}, Всего={event.usage_metadata.total_token_count}")
+                    logger.info(
+                        f"Tokens (Agent 2): Input={event.usage_metadata.prompt_token_count}, Output={event.usage_metadata.candidates_token_count}, Total={event.usage_metadata.total_token_count}")
                 if event.content and event.content.parts:
                     agent_2_output += "".join(part.text for part in event.content.parts if part.text)
 
-            logger.info("🚀 Запуск agent_3_report_generator...")
-            runner_3 = Runner(agent=agent_3_report_generator, app_name=settings.app_name, session_service=session_service)
+            logger.info("🚀 Running agent_3_report_generator...")
+            runner_3 = Runner(agent=agent_3_report_generator, app_name=settings.app_name,
+                              session_service=session_service)
             message_for_agent_3 = types.Content(role="user", parts=[types.Part(text=agent_2_output)])
             final_output = ""
-            async for event in runner_3.run_async(session_id=session_id, user_id=user_id, new_message=message_for_agent_3):
+            async for event in runner_3.run_async(session_id=session_id, user_id=user_id,
+                                                  new_message=message_for_agent_3):
                 if event.usage_metadata:
                     pipeline_tokens_used += event.usage_metadata.total_token_count
-                    logger.info(f"Токены (Агент 3): Вход={event.usage_metadata.prompt_token_count}, Выход={event.usage_metadata.candidates_token_count}, Всего={event.usage_metadata.total_token_count}")
+                    logger.info(
+                        f"Tokens (Agent 3): Input={event.usage_metadata.prompt_token_count}, Output={event.usage_metadata.candidates_token_count}, Total={event.usage_metadata.total_token_count}")
                 if event.content and event.content.parts:
                     final_output += "".join(part.text for part in event.content.parts if part.text)
 
             self.session_total_tokens += pipeline_tokens_used
-            logger.info(f"Всего токенов за Пайплайн 1: {pipeline_tokens_used}")
-            logger.info(f"Общий расход токенов за сессию: {self.session_total_tokens}")
+            logger.info(f"Total tokens for Pipeline 1: {pipeline_tokens_used}")
+            logger.info(f"Total token consumption for the session: {self.session_total_tokens}")
 
-            logger.info("Парсинг финального вывода...")
+            logger.info("Parsing final output...")
             try:
                 clean_json_str = final_output.strip().replace("```json", "").replace("```", "").strip()
                 data = json.loads(clean_json_str)
@@ -150,11 +155,11 @@ class AnalysisService:
                 }
                 return PreparationAnalysis(**final_response_data)
             except json.JSONDecodeError as e:
-                logger.error(f"Ошибка декодирования JSON от Агента 3: {e}\nПолученный текст: {final_output}")
-                raise ValueError("AI-сервис вернул некорректный формат данных.")
+                logger.error(f"Error decoding JSON from Agent 3: {e}\nReceived text: {final_output}")
+                raise ValueError("AI service returned an invalid data format.")
             except Exception as e:
-                logger.error(f"Ошибка валидации Pydantic или другая ошибка: {e}")
-                raise ValueError(f"Ошибка при формировании итогового ответа: {e}")
+                logger.error(f"Pydantic validation error or other exception: {e}")
+                raise ValueError(f"Error forming the final response: {e}")
 
     async def analyze_results(
             self,
@@ -167,26 +172,26 @@ class AnalysisService:
             job_requirements_link: str
     ) -> ResultsAnalysis:
         async with self.semaphore:
-            logger.info("🚀 Запуск Пайплайна 2: Анализ результатов интервью...")
+            logger.info("🚀 Starting Pipeline 2: Interview Results Analysis...")
             pipeline_tokens_used = 0
             temp_audio_path = None
 
             try:
                 self._set_google_api_key()
 
-                logger.info("Загрузка и транскрипция аудио...")
+                logger.info("Downloading and transcribing audio...")
                 video_file_id = fp.get_google_drive_file_id(video_link)
                 temp_audio_path = await fp.download_audio_from_drive_to_temp_file(self.drive_service, video_file_id)
                 transcription_text = await fp.transcribe_audio_assemblyai(temp_audio_path)
                 if not transcription_text:
-                    raise ValueError("Транскрипция не вернула текст. Видео может быть без звука или слишком коротким.")
+                    raise ValueError("Transcription returned no text. The video might be silent or too short.")
 
                 if cv_file and cv_filename:
                     cv_text = fp.read_file_content(cv_file, cv_filename)
                 else:
-                    cv_text = "CV не был предоставлен."
+                    cv_text = "CV was not provided."
 
-                logger.info("Загрузка текстовых артефактов из Google Drive...")
+                logger.info("Downloading text artifacts from Google Drive...")
                 links = {
                     "matrix": competency_matrix_link,
                     "values": department_values_link,
@@ -197,7 +202,7 @@ class AnalysisService:
                 drive_data = {}
                 for key, link in links.items():
                     file_id = fp.get_google_drive_file_id(link)
-                    logger.info(f"Загрузка таблицы '{key}' с ID: {file_id}...")
+                    logger.info(f"Downloading sheet '{key}' with ID: {file_id}...")
                     data = await fp.download_sheet_from_drive(self.drive_service, file_id)
                     drive_data[key] = data
 
@@ -210,7 +215,7 @@ class AnalysisService:
                 user_id = "results_user"
                 await session_service.create_session(app_name=settings.app_name, user_id=user_id, session_id=session_id)
 
-                logger.info("🚀 Запуск agent_4_topic_extractor...")
+                logger.info("🚀 Running agent_4_topic_extractor...")
                 runner_4 = Runner(agent=agent_4_topic_extractor, app_name=settings.app_name,
                                   session_service=session_service)
                 message_for_agent_4 = types.Content(role="user", parts=[types.Part(text=transcription_text)])
@@ -220,7 +225,7 @@ class AnalysisService:
                     if event.usage_metadata:
                         pipeline_tokens_used += event.usage_metadata.total_token_count
                         logger.info(
-                            f"Токены (Агент 4): Вход={event.usage_metadata.prompt_token_count}, Выход={event.usage_metadata.candidates_token_count}, Всего={event.usage_metadata.total_token_count}")
+                            f"Tokens (Agent 4): Input={event.usage_metadata.prompt_token_count}, Output={event.usage_metadata.candidates_token_count}, Total={event.usage_metadata.total_token_count}")
                     if event.content and event.content.parts:
                         agent_4_output += "".join(part.text for part in event.content.parts if part.text)
 
@@ -234,7 +239,7 @@ class AnalysisService:
                     f"### Портрет идеального сотрудника:\n{portrait_text}"
                 )
 
-                logger.info("🚀 Запуск agent_5_final_report_generator...")
+                logger.info("🚀 Running agent_5_final_report_generator...")
                 runner_5 = Runner(agent=agent_5_final_report_generator, app_name=settings.app_name,
                                   session_service=session_service)
                 message_for_agent_5 = types.Content(role="user", parts=[types.Part(text=combined_input_for_agent_5)])
@@ -244,15 +249,15 @@ class AnalysisService:
                     if event.usage_metadata:
                         pipeline_tokens_used += event.usage_metadata.total_token_count
                         logger.info(
-                            f"Токены (Агент 5): Вход={event.usage_metadata.prompt_token_count}, Выход={event.usage_metadata.candidates_token_count}, Всего={event.usage_metadata.total_token_count}")
+                            f"Tokens (Agent 5): Input={event.usage_metadata.prompt_token_count}, Output={event.usage_metadata.candidates_token_count}, Total={event.usage_metadata.total_token_count}")
                     if event.content and event.content.parts:
                         agent_5_output += "".join(part.text for part in event.content.parts if part.text)
 
                 self.session_total_tokens += pipeline_tokens_used
-                logger.info(f"Всего токенов за Пайплайн 2: {pipeline_tokens_used}")
-                logger.info(f"Общий расход токенов за сессию: {self.session_total_tokens}")
+                logger.info(f"Total tokens for Pipeline 2: {pipeline_tokens_used}")
+                logger.info(f"Total token consumption for the session: {self.session_total_tokens}")
 
-                logger.info("Парсинг финального JSON ответа от агента...")
+                logger.info("Parsing final JSON response from the agent...")
                 try:
                     start_index_4 = agent_4_output.find('{')
                     end_index_4 = agent_4_output.rfind('}')
@@ -282,11 +287,11 @@ class AnalysisService:
                         report=full_report
                     )
                 except json.JSONDecodeError as e:
-                    logger.error(f"Ошибка декодирования JSON: {e}")
-                    logger.error(f"Проблемный JSON от Агента 4: {agent_4_output}")
-                    logger.error(f"Проблемный JSON от Агента 5: {agent_5_output}")
-                    raise ValueError("AI-сервис вернул некорректный формат данных.")
+                    logger.error(f"Error decoding JSON: {e}")
+                    logger.error(f"Problematic JSON from Agent 4: {agent_4_output}")
+                    logger.error(f"Problematic JSON from Agent 5: {agent_5_output}")
+                    raise ValueError("AI service returned an invalid data format.")
             finally:
                 if temp_audio_path and os.path.exists(temp_audio_path):
                     os.remove(temp_audio_path)
-                    logger.info(f"Временный файл {temp_audio_path} удален.")
+                    logger.info(f"Temporary file {temp_audio_path} has been deleted.")

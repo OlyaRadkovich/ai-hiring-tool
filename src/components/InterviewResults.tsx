@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -72,12 +72,9 @@ interface InterviewResultsProps {
   updateCache: (data: ResultsAnalysisResponse | undefined) => void;
   isProcessing: boolean;
   setIsProcessing: (status: boolean) => void;
+  startAnalysisTask: (taskId: string) => void;
 }
-interface TaskStatusResponse {
-  status: "processing" | "completed" | "failed";
-  result?: ResultsAnalysisResponse;
-  error?: string;
-}
+
 const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
   let binary = "";
   const bytes = new Uint8Array(buffer);
@@ -93,6 +90,7 @@ export default function InterviewResults({
   updateCache,
   isProcessing,
   setIsProcessing,
+  startAnalysisTask,
 }: InterviewResultsProps) {
   const [cvFile, setCvFile] = useState<File | null>(null);
   const [videoLink, setVideoLink] = useState("");
@@ -108,66 +106,10 @@ export default function InterviewResults({
   const [jobRequirementsLink, setJobRequirementsLink] = useState(
     "https://docs.google.com/spreadsheets/d/1JOYzYmAtaPzHHuN2CvdrCXn_L30bBNlikJ5K0mRt-HE/edit?usp=drive_link"
   );
-
   const [isExporting, setIsExporting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const [taskId, setTaskId] = useState<string | null>(null);
 
   const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
-  const endpoint = `${API_BASE_URL}/api/results/`;
-
-
-  useEffect(() => {
-    if (!taskId || !isProcessing) {
-      return;
-    }
-
-    const intervalId = setInterval(async () => {
-      try {
-        const res = await fetch(`${API_BASE_URL}/api/results/${taskId}/status`);
-        if (!res.ok) {
-          throw new Error(`Failed to fetch task status: ${res.statusText}`);
-        }
-
-        const data: TaskStatusResponse = await res.json();
-
-        if (data.status === "completed") {
-          clearInterval(intervalId);
-          setIsProcessing(false);
-          setTaskId(null);
-          if (data.result) {
-            updateCache(data.result);
-            toast({
-              title: "Успех",
-              description: "Анализ успешно завершен.",
-            });
-          } else {
-            throw new Error("Analysis completed, but no result was returned.");
-          }
-        } else if (data.status === "failed") {
-          clearInterval(intervalId);
-          setIsProcessing(false);
-          setTaskId(null);
-          toast({
-            title: "Ошибка анализа",
-            description: data.error || "Произошла неизвестная ошибка.",
-            variant: "destructive",
-          });
-        }
-      } catch (error: any) {
-        clearInterval(intervalId);
-        setIsProcessing(false);
-        setTaskId(null);
-        toast({
-          title: "Ошибка сети",
-          description: `Не удалось получить статус задачи: ${error.message}`,
-          variant: "destructive",
-        });
-      }
-    }, 7000);
-
-    return () => clearInterval(intervalId);
-  }, [taskId, isProcessing, updateCache, setIsProcessing, API_BASE_URL]);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -213,7 +155,6 @@ export default function InterviewResults({
 
     setIsProcessing(true);
     updateCache(undefined);
-    setTaskId(null);
 
     try {
         const form = new FormData();
@@ -241,7 +182,7 @@ export default function InterviewResults({
             title: "Задача принята",
             description: "Анализ запущен. Вы будете уведомлены о завершении.",
         });
-        setTaskId(data.task_id);
+        startAnalysisTask(data.task_id);
     } catch (err: any) {
         toast({
             title: "Ошибка",
