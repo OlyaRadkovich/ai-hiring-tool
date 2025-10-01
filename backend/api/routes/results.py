@@ -2,27 +2,32 @@ import io
 from typing import Optional
 from fastapi import APIRouter, UploadFile, File, Form, status, HTTPException, Depends
 from google.genai.errors import ServerError
+import uuid
+import json
+from multiprocessing import Queue
+from fastapi import (
+    APIRouter,
+    Depends,
+    UploadFile,
+    File,
+    Form,
+    HTTPException,
+    status
+)
 from loguru import logger
-from backend.api.models import ResultsAnalysis, ErrorResponse
-from backend.services.analysis_service import AnalysisService
-from backend.api.deps import get_analysis_service
-from googleapiclient.errors import HttpError
-from backend.utils.validators import FileValidator
+
+from backend.queue.manager import get_task_queue, get_task_store
+from backend.api.models import TaskResponse
 
 router = APIRouter()
 
 
 @router.post(
     "/",
-    response_model=ResultsAnalysis,
-    responses={
-        400: {"model": ErrorResponse},
-        403: {"model": ErrorResponse},
-        404: {"model": ErrorResponse},
-        500: {"model": ErrorResponse},
-    },
-    summary="Анализ результатов интервью",
-    description="Принимает полный набор данных для генерации развернутого фидбэка по кандидату."
+    summary="Queue Interview Analysis Task",
+    description="Accepts interview data, queues the analysis task, and returns immediately.",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=TaskResponse
 )
 async def analyze_results_endpoint(
         cv_file: Optional[UploadFile] = File(None, description="Резюме кандидата (.pdf, .docx, .txt)."),
@@ -32,11 +37,28 @@ async def analyze_results_endpoint(
         employee_portrait_link: str = Form(..., description="Ссылка на портрет сотрудника."),
         job_requirements_link: str = Form(..., description="Ссылка на требования к вакансии."),
         analysis_service: AnalysisService = Depends(get_analysis_service)
+async def queue_analysis_task(
+        cv_file: UploadFile = File(..., description="Candidate's CV file"),
+        video_link: str = Form(..., description="Link to the interview video recording"),
+        competency_matrix_link: str = Form(..., description="Link to the competency matrix"),
+        department_values_link: str = Form(..., description="Link to department values document"),
+        employee_portrait_link: str = Form(..., description="Link to the employee portrait document"),
+        job_requirements_link: str = Form(..., description="Link to the job requirements"),
+        task_queue: Queue = Depends(get_task_queue),
+        task_store: dict = Depends(get_task_store)
 ):
     """
     Эндпоинт для анализа результатов интервью.
     Принимает CV (опционально), ссылку на видео и ссылки на документы с требованиями.
     """
+    """
+    This endpoint receives all necessary data for analysis,
+    creates a unique task, places it in the background queue,
+    and returns the task ID.
+    """
+    task_id = str(uuid.uuid4())
+    logger.info(f"Received analysis request for CV: {cv_file.filename}. Assigned task ID: {task_id}")
+
     try:
 
         if cv_file:
@@ -59,31 +81,67 @@ async def analyze_results_endpoint(
         sa_email = "не удалось определить"
         if analysis_service.drive_service:
             sa_email = analysis_service.drive_service.credentials.service_account_email
+        task_store[task_id] = {"status": "processing"}
+        cv_content_bytes = await cv_file.read()
 
-        logger.error(f"Получена ошибка Google API: Status={he.status_code}, Reason={he.reason}")
+        task_details = {
+            "task_id": task_id,
+            "cv_content_bytes": cv_content_bytes,
+            "cv_filename": cv_file.filename,
+            "video_link": video_link,
+            "competency_matrix_link": competency_matrix_link,
+            "department_values_link": department_values_link,
+            "employee_portrait_link": employee_portrait_link,
+            "job_requirements_link": job_requirements_link
+        }
 
-        detail_message = f"Ошибка Google API: {he.reason}. " \
-                         f"Убедитесь, что вы предоставили доступ к файлу для сервисного аккаунта с email: {sa_email}"
+        task_queue.put(task_details)
+        logger.info(f"Task {task_id} for {cv_file.filename} has been successfully queued.")
 
-        raise HTTPException(
-            status_code=he.status_code or 400,
-            detail=detail_message
+        return TaskResponse(
+            message="Analysis task has been accepted for processing.",
+            task_id=task_id
         )
-    except ValueError as ve:
-        logger.error(f"Ошибка значения в пайплайне: {ve}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(ve)
-        )
-    except ServerError as e:
-        logger.warning(f"Сервер Google перегружен: {e.message}. Попробуйте позже.")
-        raise HTTPException(
-            status_code=503,
-            detail="AI-модель временно перегружена. Пожалуйста, повторите попытку через несколько минут."
-        )
+
     except Exception as e:
-        logger.error(f"Произошла непредвиденная ошибка: {e}", exc_info=True)
+        logger.error(f"Failed to queue task {task_id}: {e}", exc_info=True)
+        task_store[task_id] = {"status": "failed", "error": "Failed to queue the task."}
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Произошла внутренняя ошибка сервера: {e}"
+            detail="Could not queue the analysis task."
         )
+
+
+@router.get(
+    "/{task_id}/status",
+    summary="Get Task Status",
+    description="Poll this endpoint to get the status and result of a background task."
+)
+async def get_task_status(task_id: str, task_store: dict = Depends(get_task_store)):
+    """
+    Retrieves the status of a task from the shared task store.
+    If the task is completed, it parses the JSON result before returning.
+    """
+    task_info = task_store.get(task_id)
+    if not task_info:
+        logger.warning(f"Status requested for non-existent task ID: {task_id}")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found.")
+
+    current_status = task_info.get("status")
+    logger.debug(f"Status checked for task {task_id}: {current_status}")
+
+    if current_status == "completed":
+        result_json_string = task_info.get("result_json")
+        if result_json_string:
+            parsed_result = json.loads(result_json_string)
+            return {"status": "completed", "result": parsed_result}
+        else:
+            logger.error(f"Task {task_id} is completed but has no result_json.")
+            return {"status": "failed", "error": "Completed task is missing result data."}
+
+    elif current_status == "failed":
+        return {"status": "failed", "error": task_info.get("error", "Unknown error")}
+
+    else:  # status == "processing"
+        return {"status": "processing"}

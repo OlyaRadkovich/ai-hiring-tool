@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import { toast } from "./ui/use-toast";
 
 interface CandidateInfo {
   full_name: string;
@@ -34,27 +35,22 @@ interface CandidateInfo {
   domains: string[];
   tasks: string[];
 }
-
 interface InterviewAnalysis {
   topics: string[];
   tech_assignment: string;
   knowledge_assessment: string;
 }
-
 interface CommunicationSkills {
   assessment: string;
 }
-
 interface ForeignLanguages {
   assessment: string;
 }
-
 interface FinalConclusion {
   recommendation: string;
   assessed_level: string;
   summary: string;
 }
-
 interface FullReport {
   ai_summary: string;
   candidate_info: CandidateInfo;
@@ -66,21 +62,22 @@ interface FullReport {
   conclusion: FinalConclusion;
   recommendations_for_candidate: string[];
 }
-
 interface ResultsAnalysisResponse {
   message: string;
   success: boolean;
   report: FullReport;
 }
-
 interface InterviewResultsProps {
   cachedData: ResultsAnalysisResponse | undefined;
   updateCache: (data: ResultsAnalysisResponse | undefined) => void;
   isProcessing: boolean;
   setIsProcessing: (status: boolean) => void;
 }
-
-
+interface TaskStatusResponse {
+  status: "processing" | "completed" | "failed";
+  result?: ResultsAnalysisResponse;
+  error?: string;
+}
 const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
   let binary = "";
   const bytes = new Uint8Array(buffer);
@@ -114,6 +111,110 @@ export default function InterviewResults({
 
   const [isExporting, setIsExporting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [taskId, setTaskId] = useState<string | null>(null);
+
+  const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
+  useEffect(() => {
+    if (!taskId || !isProcessing) {
+      return;
+    }
+
+    const intervalId = setInterval(async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/results/${taskId}/status`);
+        if (!res.ok) {
+          throw new Error(`Failed to fetch task status: ${res.statusText}`);
+        }
+
+        const data: TaskStatusResponse = await res.json();
+
+        if (data.status === "completed") {
+          clearInterval(intervalId);
+          setIsProcessing(false);
+          setTaskId(null);
+          if (data.result) {
+            updateCache(data.result);
+            toast({
+              title: "Успех",
+              description: "Анализ успешно завершен.",
+            });
+          } else {
+            throw new Error("Analysis completed, but no result was returned.");
+          }
+        } else if (data.status === "failed") {
+          clearInterval(intervalId);
+          setIsProcessing(false);
+          setTaskId(null);
+          toast({
+            title: "Ошибка анализа",
+            description: data.error || "Произошла неизвестная ошибка.",
+            variant: "destructive",
+          });
+        }
+      } catch (error: any) {
+        clearInterval(intervalId);
+        setIsProcessing(false);
+        setTaskId(null);
+        toast({
+          title: "Ошибка сети",
+          description: `Не удалось получить статус задачи: ${error.message}`,
+          variant: "destructive",
+        });
+      }
+    }, 7000);
+
+    return () => clearInterval(intervalId);
+  }, [taskId, isProcessing, updateCache, setIsProcessing, API_BASE_URL]);
+
+  const handleAnalyzeInterview = async () => {
+    if (!cvFile || !videoLink) {
+      toast({
+        title: "Ошибка ввода",
+        description: "Пожалуйста, загрузите CV и укажите ссылку на видео.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsProcessing(true);
+    updateCache(undefined);
+    setTaskId(null);
+
+    try {
+      const form = new FormData();
+      form.append("cv_file", cvFile);
+      form.append("video_link", videoLink);
+      form.append("competency_matrix_link", competencyMatrixLink);
+      form.append("department_values_link", departmentValuesLink);
+      form.append("employee_portrait_link", employeePortraitLink);
+      form.append("job_requirements_link", jobRequirementsLink);
+
+      const res = await fetch(`${API_BASE_URL}/api/results/`, {
+        method: "POST",
+        body: form,
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.detail || "Не удалось запустить задачу анализа.");
+      }
+
+      toast({
+        title: "Задача принята",
+        description: "Анализ запущен. Вы будете уведомлены о завершении.",
+      });
+      setTaskId(data.task_id);
+    } catch (err: any) {
+      toast({
+        title: "Ошибка",
+        description: err.message,
+        variant: "destructive",
+      });
+      setIsProcessing(false);
+    }
+  };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -474,6 +575,7 @@ export default function InterviewResults({
               <BookUser className="w-5 h-5 text-primary" />
               <span>CV Кандидата (Опционально)</span>
             </CardTitle>
+            <CardTitle>Анализ результатов интервью</CardTitle>
             <CardDescription>
               Перетащите файл или нажмите на область для загрузки .txt, .pdf,
               .docx
