@@ -110,8 +110,7 @@ async def transcribe_audio_assemblyai(audio_path: str) -> str:
     """
     logger.info(f"Starting audio transcription ({audio_path}) via AssemblyAI...")
 
-    config = aai.TranscriptionConfig(language_detection=True)
-    transcriber = aai.Transcriber(config=config)
+    transcriber = aai.Transcriber()
 
     def sync_transcribe_task():
         logger.info("Running synchronous transcription task in a separate thread...")

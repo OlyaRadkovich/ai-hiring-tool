@@ -3,6 +3,7 @@ import json
 import io
 import asyncio
 import base64
+import httpx
 from typing import Optional
 from loguru import logger
 
@@ -32,7 +33,9 @@ class AnalysisService:
         self.semaphore = asyncio.Semaphore(1)
         if settings.assemblyai_api_key:
             aai.settings.api_key = settings.assemblyai_api_key
-            logger.success("AssemblyAI client configured.")
+            custom_http_client = httpx.Client(timeout=900.0)
+            aai.settings.http_client = custom_http_client
+            logger.success("AssemblyAI client configured with a 15-minute timeout.")
         else:
             logger.warning("AssemblyAI API key not configured in .env file!")
 
