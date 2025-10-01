@@ -67,3 +67,8 @@ class FullReport(BaseModel):
 
 class ResultsAnalysis(BaseResponse):
     report: FullReport
+
+class TaskResponse(BaseModel):
+    message: str
+    task_id: str
+

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import { toast } from "./ui/use-toast";
 
 interface CandidateInfo {
   full_name: string;
@@ -34,27 +35,22 @@ interface CandidateInfo {
   domains: string[];
   tasks: string[];
 }
-
 interface InterviewAnalysis {
   topics: string[];
   tech_assignment: string;
   knowledge_assessment: string;
 }
-
 interface CommunicationSkills {
   assessment: string;
 }
-
 interface ForeignLanguages {
   assessment: string;
 }
-
 interface FinalConclusion {
   recommendation: string;
   assessed_level: string;
   summary: string;
 }
-
 interface FullReport {
   ai_summary: string;
   candidate_info: CandidateInfo;
@@ -66,20 +62,18 @@ interface FullReport {
   conclusion: FinalConclusion;
   recommendations_for_candidate: string[];
 }
-
 interface ResultsAnalysisResponse {
   message: string;
   success: boolean;
   report: FullReport;
 }
-
 interface InterviewResultsProps {
   cachedData: ResultsAnalysisResponse | undefined;
   updateCache: (data: ResultsAnalysisResponse | undefined) => void;
   isProcessing: boolean;
   setIsProcessing: (status: boolean) => void;
+  startAnalysisTask: (taskId: string) => void;
 }
-
 
 const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
   let binary = "";
@@ -96,6 +90,7 @@ export default function InterviewResults({
   updateCache,
   isProcessing,
   setIsProcessing,
+  startAnalysisTask,
 }: InterviewResultsProps) {
   const [cvFile, setCvFile] = useState<File | null>(null);
   const [videoLink, setVideoLink] = useState("");
@@ -111,9 +106,10 @@ export default function InterviewResults({
   const [jobRequirementsLink, setJobRequirementsLink] = useState(
     "https://docs.google.com/spreadsheets/d/1JOYzYmAtaPzHHuN2CvdrCXn_L30bBNlikJ5K0mRt-HE/edit?usp=drive_link"
   );
-
   const [isExporting, setIsExporting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+
+  const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -149,53 +145,51 @@ export default function InterviewResults({
 
   const handleAnalyzeInterview = async () => {
     if (!videoLink) {
-      alert("Пожалуйста, укажите ссылку на видеозапись.");
-      return;
+        toast({
+            title: "Ошибка ввода",
+            description: "Пожалуйста, укажите ссылку на видео.",
+            variant: "destructive",
+        });
+        return;
     }
 
     setIsProcessing(true);
     updateCache(undefined);
-    let rawResponseText = "";
 
     try {
-      const form = new FormData();
-      if (cvFile) {
-        form.append("cv_file", cvFile);
-      }
-      form.append("video_link", videoLink);
-      form.append("competency_matrix_link", competencyMatrixLink);
-      form.append("department_values_link", departmentValuesLink);
-      form.append("employee_portrait_link", employeePortraitLink);
-      form.append("job_requirements_link", jobRequirementsLink);
-
-      const res = await fetch("http://localhost:8000/api/results/", {
-        method: "POST",
-        body: form,
-      });
-
-      rawResponseText = await res.text();
-
-      if (!res.ok) {
-        try {
-          const errorData = JSON.parse(rawResponseText);
-          throw new Error(errorData.detail || "Analyze failed");
-        } catch {
-          throw new Error(
-            rawResponseText || `Server returned status ${res.status}`
-          );
+        const form = new FormData();
+        if (cvFile) {
+            form.append("cv_file", cvFile);
         }
-      }
+        form.append("video_link", videoLink);
+        form.append("competency_matrix_link", competencyMatrixLink);
+        form.append("department_values_link", departmentValuesLink);
+        form.append("employee_portrait_link", employeePortraitLink);
+        form.append("job_requirements_link", jobRequirementsLink);
 
-      const data = JSON.parse(rawResponseText);
-      updateCache(data);
+        const res = await fetch(`${API_BASE_URL}/api/results/`, {
+            method: "POST",
+            body: form,
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+            throw new Error(data.detail || "Не удалось запустить задачу анализа.");
+        }
+
+        toast({
+            title: "Задача принята",
+            description: "Анализ запущен. Вы будете уведомлены о завершении.",
+        });
+        startAnalysisTask(data.task_id);
     } catch (err: any) {
-      console.error("Ошибка обработки ответа от сервера:", err);
-      console.error("Сырой ответ от сервера (Raw response):", rawResponseText);
-      alert(
-        `Произошла ошибка: ${err.message}. Подробности смотрите в консоли разработчика (F12).`
-      );
-    } finally {
-      setIsProcessing(false);
+        toast({
+            title: "Ошибка",
+            description: err.message,
+            variant: "destructive",
+        });
+        setIsProcessing(false);
     }
   };
 
@@ -474,10 +468,6 @@ export default function InterviewResults({
               <BookUser className="w-5 h-5 text-primary" />
               <span>CV Кандидата (Опционально)</span>
             </CardTitle>
-            <CardDescription>
-              Перетащите файл или нажмите на область для загрузки .txt, .pdf,
-              .docx
-            </CardDescription>
           </CardHeader>
           <CardContent>
             <div
@@ -502,7 +492,7 @@ export default function InterviewResults({
                 <p className="text-sm text-muted-foreground mb-2">
                   {cvFile
                     ? cvFile.name
-                    : "Нажмите или перетащите файл для загрузки"}
+                    : "Нажмите или перетащите файл для загрузки (.txt, .pdf, .docx)"}
                 </p>
               </label>
             </div>

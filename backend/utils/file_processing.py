@@ -1,8 +1,8 @@
 import io
 import re
 import asyncio
-import tempfile  # Добавляем для работы с временными файлами
-import os  # Добавляем для удаления файла
+import tempfile
+import os
 from loguru import logger
 
 from pypdf import PdfReader
@@ -13,7 +13,7 @@ from googleapiclient.http import MediaIoBaseDownload
 
 def get_google_drive_file_id(link: str) -> str:
     """
-    Извлекает ID файла из ссылки на Google Drive.
+    Extracts the file ID from a Google Drive link.
     """
     patterns = [
         r'/file/d/([a-zA-Z0-9_-]+)',
@@ -23,16 +23,16 @@ def get_google_drive_file_id(link: str) -> str:
         match = re.search(pattern, link)
         if match:
             return match.group(1)
-    raise ValueError("Некорректная ссылка на Google Drive. Не удалось извлечь ID файла.")
+    raise ValueError("Invalid Google Drive link. Could not extract file ID.")
 
 
 async def download_sheet_from_drive(drive_service, file_id: str) -> str:
     """
-    Загружает Google Таблицу как CSV и возвращает ее текстовое содержимое.
+    Downloads a Google Sheet as CSV and returns its text content.
     """
     if not drive_service:
-        raise ConnectionError("Сервис Google Drive не инициализирован.")
-    logger.info(f"Начало загрузки таблицы с ID: {file_id} из Google Drive.")
+        raise ConnectionError("Google Drive service is not initialized.")
+    logger.info(f"Starting download of sheet with ID: {file_id} from Google Drive.")
     try:
         request = drive_service.files().export_media(fileId=file_id, mimeType='text/csv')
         file_io = io.BytesIO()
@@ -44,26 +44,25 @@ async def download_sheet_from_drive(drive_service, file_id: str) -> str:
                 _, done = downloader.next_chunk()
 
         await asyncio.to_thread(download_in_thread)
-        logger.success(f"Таблица {file_id} успешно экспортирована в CSV.")
+        logger.success(f"Sheet {file_id} successfully exported to CSV.")
         file_io.seek(0)
         return file_io.read().decode('utf-8')
     except Exception as e:
-        logger.error(f"Ошибка при экспорте таблицы из Google Drive: {e}", exc_info=True)
-        raise IOError(f"Не удалось загрузить требования из Google Drive: {e}")
+        logger.error(f"Error exporting sheet from Google Drive: {e}", exc_info=True)
+        raise IOError(f"Failed to download requirements from Google Drive: {e}")
 
 
 async def download_audio_from_drive_to_temp_file(drive_service, file_id: str) -> str:
     """
-    Асинхронно загружает аудио/видео файл из Google Drive во временный файл на диске.
-    Возвращает путь к временному файлу.
+    Asynchronously downloads an audio/video file from Google Drive to a temporary file on disk.
+    Returns the path to the temporary file.
     """
     if not drive_service:
-        raise ConnectionError("Сервис Google Drive не инициализирован. Проверьте учетные данные.")
-    logger.info(f"Начало загрузки файла с ID: {file_id} из Google Drive на диск.")
+        raise ConnectionError("Google Drive service not initialized. Check credentials.")
+    logger.info(f"Starting download of file with ID: {file_id} from Google Drive to disk.")
     try:
         request = drive_service.files().get_media(fileId=file_id)
 
-        # Создаем временный файл
         fd, temp_file_path = tempfile.mkstemp()
 
         with os.fdopen(fd, 'wb') as f:
@@ -74,22 +73,22 @@ async def download_audio_from_drive_to_temp_file(drive_service, file_id: str) ->
                 while not done:
                     status, done = downloader.next_chunk()
                     if status:
-                        logger.info(f"Прогресс загрузки: {int(status.progress() * 100)}%.")
+                        logger.info(f"Download progress: {int(status.progress() * 100)}%.")
 
             await asyncio.to_thread(download_in_thread)
 
-        logger.success(f"Файл {file_id} успешно загружен во временный файл: {temp_file_path}")
+        logger.success(f"File {file_id} successfully downloaded to temporary file: {temp_file_path}")
         return temp_file_path
     except Exception as e:
-        logger.error(f"Критическая ошибка при попытке скачать файл из Google Drive: {e}", exc_info=True)
+        logger.error(f"Critical error while trying to download file from Google Drive: {e}", exc_info=True)
         raise e
 
 
 def read_file_content(file: io.BytesIO, filename: str) -> str:
     """
-    Читает содержимое файла (PDF, DOCX, TXT) и возвращает текст.
+    Reads the content of a file (PDF, DOCX, TXT) and returns the text.
     """
-    logger.info(f"Извлечение текста из файла: {filename}")
+    logger.info(f"Extracting text from file: {filename}")
     try:
         if filename.lower().endswith('.pdf'):
             reader = PdfReader(file)
@@ -101,32 +100,31 @@ def read_file_content(file: io.BytesIO, filename: str) -> str:
         else:
             return file.read().decode('utf-8', errors='ignore')
     except Exception as e:
-        logger.error(f"Ошибка при чтении файла {filename}: {e}")
+        logger.error(f"Error reading file {filename}: {e}")
         raise ValueError(f"Could not process file: {filename}")
 
 
 async def transcribe_audio_assemblyai(audio_path: str) -> str:
     """
-    Транскрибирует аудиофайл, находящийся по указанному пути.
+    Transcribes an audio file from the specified path.
     """
-    logger.info(f"Начало транскрипции аудио ({audio_path}) через AssemblyAI...")
+    logger.info(f"Starting audio transcription ({audio_path}) via AssemblyAI...")
 
-    config = aai.TranscriptionConfig(language_detection=True)
-    transcriber = aai.Transcriber(config=config)
+    transcriber = aai.Transcriber()
 
     def sync_transcribe_task():
-        logger.info("Запуск синхронной задачи транскрипции в отдельном потоке...")
+        logger.info("Running synchronous transcription task in a separate thread...")
         return transcriber.transcribe(audio_path)
 
     transcript = await asyncio.to_thread(sync_transcribe_task)
 
     if transcript.status == aai.TranscriptStatus.error:
-        logger.error(f"Ошибка транскрипции AssemblyAI: {transcript.error}")
+        logger.error(f"AssemblyAI transcription error: {transcript.error}")
         raise ValueError(f"Transcription failed: {transcript.error}")
 
-    logger.success("Транскрипция AssemblyAI успешно завершена.")
+    logger.success("AssemblyAI transcription completed successfully.")
 
     if not transcript.text:
-        logger.warning("Транскрипция вернула пустой текст.")
+        logger.warning("Transcription returned empty text.")
 
     return transcript.text or ""
