@@ -3,7 +3,6 @@ import json
 import io
 import asyncio
 import base64
-import httpx
 from typing import Optional
 from loguru import logger
 
@@ -33,9 +32,7 @@ class AnalysisService:
         self.semaphore = asyncio.Semaphore(1)
         if settings.assemblyai_api_key:
             aai.settings.api_key = settings.assemblyai_api_key
-            custom_http_client = httpx.Client(timeout=900.0)
-            aai.settings.http_client = custom_http_client
-            logger.success("AssemblyAI client configured with a 15-minute timeout.")
+            logger.success("AssemblyAI client configured.")
         else:
             logger.warning("AssemblyAI API key not configured in .env file!")
 
@@ -174,6 +171,16 @@ class AnalysisService:
             employee_portrait_link: str,
             job_requirements_link: str
     ) -> ResultsAnalysis:
+
+        cv_text: str
+        if cv_file and cv_filename:
+            logger.info(f"Processing provided CV file: {cv_filename}")
+            cv_text = fp.read_file_content(cv_file, cv_filename)
+        else:
+            logger.info("CV file was not provided for this analysis.")
+            cv_text = "CV was not provided for this analysis."
+
+
         async with self.semaphore:
             logger.info("🚀 Starting Pipeline 2: Interview Results Analysis...")
             pipeline_tokens_used = 0
@@ -182,17 +189,24 @@ class AnalysisService:
             try:
                 self._set_google_api_key()
 
-                logger.info("Downloading and transcribing audio...")
+                logger.info("Starting audio processing pipeline...")
+                logger.info(f"Extracting file ID from Google Drive link: {video_link}")
                 video_file_id = fp.get_google_drive_file_id(video_link)
-                temp_audio_path = await fp.download_audio_from_drive_to_temp_file(self.drive_service, video_file_id)
-                transcription_text = await fp.transcribe_audio_assemblyai(temp_audio_path)
-                if not transcription_text:
-                    raise ValueError("Transcription returned no text. The video might be silent or too short.")
+                logger.info(f"Successfully extracted file ID: {video_file_id}")
 
-                if cv_file and cv_filename:
-                    cv_text = fp.read_file_content(cv_file, cv_filename)
+                logger.info(f"Starting download for file ID {video_file_id}...")
+                temp_audio_path = await fp.download_audio_from_drive_to_temp_file(self.drive_service, video_file_id)
+                logger.success(f"File successfully downloaded to temporary path: {temp_audio_path}")
+
+                logger.info(f"Sending downloaded file for transcription...")
+                transcription_text = await fp.transcribe_audio_assemblyai(temp_audio_path)
+                logger.success("Transcription received successfully.")
+
+                if not transcription_text:
+                    logger.warning("Transcription result is empty. Raising an error.")
+                    raise ValueError("Transcription returned no text. The video might be silent or too short.")
                 else:
-                    cv_text = "CV was not provided."
+                    logger.info(f"Transcription is not empty. Character count: {len(transcription_text)}")
 
                 logger.info("Downloading text artifacts from Google Drive...")
                 links = {
@@ -262,22 +276,10 @@ class AnalysisService:
 
                 logger.info("Parsing final JSON response from the agent...")
                 try:
-                    start_index_4 = agent_4_output.find('{')
-                    end_index_4 = agent_4_output.rfind('}')
-                    if start_index_4 != -1 and end_index_4 != -1:
-                        clean_json_str_4 = agent_4_output[start_index_4:end_index_4 + 1]
-                    else:
-                        clean_json_str_4 = agent_4_output
-
+                    clean_json_str_4 = fp.extract_json_from_string(agent_4_output)
                     topics_data = json.loads(clean_json_str_4)
 
-                    start_index_5 = agent_5_output.find('{')
-                    end_index_5 = agent_5_output.rfind('}')
-                    if start_index_5 != -1 and end_index_5 != -1:
-                        clean_json_str_5 = agent_5_output[start_index_5:end_index_5 + 1]
-                    else:
-                        clean_json_str_5 = agent_5_output
-
+                    clean_json_str_5 = fp.extract_json_from_string(agent_5_output)
                     report_data = json.loads(clean_json_str_5)
 
                     if "topics" in topics_data and "interview_analysis" in report_data:

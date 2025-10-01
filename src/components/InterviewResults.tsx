@@ -145,51 +145,53 @@ export default function InterviewResults({
 
   const handleAnalyzeInterview = async () => {
     if (!videoLink) {
-        toast({
-            title: "Ошибка ввода",
-            description: "Пожалуйста, укажите ссылку на видео.",
-            variant: "destructive",
-        });
-        return;
+      alert("Пожалуйста, укажите ссылку на видеозапись.");
+      return;
     }
 
     setIsProcessing(true);
     updateCache(undefined);
+    let rawResponseText = "";
 
     try {
-        const form = new FormData();
-        if (cvFile) {
-            form.append("cv_file", cvFile);
-        }
-        form.append("video_link", videoLink);
-        form.append("competency_matrix_link", competencyMatrixLink);
-        form.append("department_values_link", departmentValuesLink);
-        form.append("employee_portrait_link", employeePortraitLink);
-        form.append("job_requirements_link", jobRequirementsLink);
+      const form = new FormData();
+      if (cvFile) {
+        form.append("cv_file", cvFile);
+      }
+      form.append("video_link", videoLink);
+      form.append("competency_matrix_link", competencyMatrixLink);
+      form.append("department_values_link", departmentValuesLink);
+      form.append("employee_portrait_link", employeePortraitLink);
+      form.append("job_requirements_link", jobRequirementsLink);
 
         const res = await fetch(`${API_BASE_URL}/api/results/`, {
             method: "POST",
             body: form,
         });
 
-        const data = await res.json();
+      rawResponseText = await res.text();
 
-        if (!res.ok) {
-            throw new Error(data.detail || "Не удалось запустить задачу анализа.");
+      if (!res.ok) {
+        try {
+          const errorData = JSON.parse(rawResponseText);
+          throw new Error(errorData.detail || "Analyze failed");
+        } catch {
+          throw new Error(
+            rawResponseText || `Server returned status ${res.status}`
+          );
         }
+      }
 
-        toast({
-            title: "Задача принята",
-            description: "Анализ запущен. Вы будете уведомлены о завершении.",
-        });
-        startAnalysisTask(data.task_id);
+      const data = JSON.parse(rawResponseText);
+      updateCache(data);
     } catch (err: any) {
-        toast({
-            title: "Ошибка",
-            description: err.message,
-            variant: "destructive",
-        });
-        setIsProcessing(false);
+      console.error("Ошибка обработки ответа от сервера:", err);
+      console.error("Сырой ответ от сервера (Raw response):", rawResponseText);
+      alert(
+        `Произошла ошибка: ${err.message}. Подробности смотрите в консоли разработчика (F12).`
+      );
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -466,7 +468,7 @@ export default function InterviewResults({
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <BookUser className="w-5 h-5 text-primary" />
-              <span>CV Кандидата (Опционально)</span>
+              <span>CV кандидата (опционально)</span>
             </CardTitle>
           </CardHeader>
           <CardContent>

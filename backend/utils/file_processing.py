@@ -8,6 +8,8 @@ from loguru import logger
 from pypdf import PdfReader
 import docx
 import assemblyai as aai
+from assemblyai.client import Client as AssemblyAIClient
+from assemblyai.types import Settings as AssemblyAISettings
 from googleapiclient.http import MediaIoBaseDownload
 
 
@@ -106,16 +108,34 @@ def read_file_content(file: io.BytesIO, filename: str) -> str:
 
 async def transcribe_audio_assemblyai(audio_path: str) -> str:
     """
-    Transcribes an audio file from the specified path.
+    Transcribes an audio file from the specified path using a correctly configured client.
     """
     logger.info(f"Starting audio transcription ({audio_path}) via AssemblyAI...")
 
-    transcriber = aai.Transcriber()
+    try:
+        if not os.path.exists(audio_path):
+            logger.error(f"File not found at the provided path: {audio_path}")
+            raise FileNotFoundError(f"Audio file for transcription not found at {audio_path}")
+
+        file_size_mb = os.path.getsize(audio_path) / (1024 * 1024)
+        logger.info(f"Source file found. Size: {file_size_mb:.2f} MB.")
+        if file_size_mb == 0:
+            logger.warning(f"Source file at {audio_path} is empty (0 bytes).")
+    except Exception as e:
+        logger.error(f"Failed to access or check source file at {audio_path}: {e}")
+        raise
+
+    custom_settings = AssemblyAISettings(http_timeout=900.0)
+    api_client = AssemblyAIClient(settings=custom_settings)
+
+    transcriber = aai.Transcriber(client=api_client)
 
     def sync_transcribe_task():
         logger.info("Running synchronous transcription task in a separate thread...")
-        return transcriber.transcribe(audio_path)
+        config = aai.TranscriptionConfig(language_detection=True)
+        return transcriber.transcribe(audio_path, config=config)
 
+    logger.info("Submitting file to AssemblyAI API for transcription...")
     transcript = await asyncio.to_thread(sync_transcribe_task)
 
     if transcript.status == aai.TranscriptStatus.error:
@@ -128,3 +148,19 @@ async def transcribe_audio_assemblyai(audio_path: str) -> str:
         logger.warning("Transcription returned empty text.")
 
     return transcript.text or ""
+
+
+def extract_json_from_string(text: str) -> str:
+    """
+    Finds and extracts the first JSON object from a string, stripping markdown code blocks.
+    """
+
+    text = text.strip().replace("```json", "").replace("```", "").strip()
+
+    start_index = text.find('{')
+    end_index = text.rfind('}')
+
+    if start_index != -1 and end_index != -1 and end_index > start_index:
+        return text[start_index:end_index + 1]
+
+    return text
