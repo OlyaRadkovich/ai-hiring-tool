@@ -30,7 +30,7 @@ steps:
       - '--memory=2Gi'
       - '--set-secrets=REDIS_URL=REDIS_URL:latest,GOOGLE_API_KEY=google-api-key:latest,ASSEMBLYAI_API_KEY=assemblyai-api-key:latest,GOOGLE_APPLICATION_B64=google-application-b64:latest'
 
-  - name: 'gcr.io/cloud-builders/gcloud'
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     id: 'Deploy Worker Service'
     args:
       - 'run'
