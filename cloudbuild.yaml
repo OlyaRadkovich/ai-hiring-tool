@@ -33,6 +33,7 @@ steps:
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     id: 'Deploy Worker Service'
     args:
+      - 'gcloud'
       - 'run'
       - 'deploy'
       - 'ai-hiring-tool-worker'
