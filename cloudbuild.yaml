@@ -15,6 +15,22 @@ steps:
       - 'push'
       - 'europe-west1-docker.pkg.dev/$PROJECT_ID/ai-hiring-repo/ai-hiring-tool-backend:$COMMIT_SHA'
 
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'Build Worker Image'
+    args:
+      - 'build'
+      - '-t'
+      - 'europe-west1-docker.pkg.dev/$PROJECT_ID/ai-hiring-repo/ai-hiring-tool-worker:$COMMIT_SHA' # Новое имя образа!
+      - '.'
+      - '-f'
+      - 'worker.Dockerfile'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'Push Worker Image'
+    args:
+      - 'push'
+      - 'europe-west1-docker.pkg.dev/$PROJECT_ID/ai-hiring-repo/ai-hiring-tool-worker:$COMMIT_SHA'
+
   - name: 'gcr.io/cloud-builders/gcloud'
     id: 'Deploy API Service'
     args:
@@ -37,7 +53,7 @@ steps:
       - 'run'
       - 'deploy'
       - 'ai-hiring-tool-worker'
-      - '--image=europe-west1-docker.pkg.dev/$PROJECT_ID/ai-hiring-repo/ai-hiring-tool-backend:$COMMIT_SHA' # Используем ТОТ ЖЕ самый образ бэкенда
+      - '--image=europe-west1-docker.pkg.dev/$PROJECT_ID/ai-hiring-repo/ai-hiring-tool-worker:$COMMIT_SHA'
       - '--region=europe-west1'
       - '--platform=managed'
       - '--service-account=ai-hiring-tool@qa-assistant-452611.iam.gserviceaccount.com'
@@ -45,9 +61,6 @@ steps:
       - '--no-allow-unauthenticated'
       - '--max-instances=1'
       - '--no-cpu-throttling'
-      - '--no-startup-probe'
-      - '--command=python'
-      - '--args=-m,backend.queue.worker'
       - '--set-secrets=REDIS_URL=REDIS_URL:latest,GOOGLE_API_KEY=google-api-key:latest,ASSEMBLYAI_API_KEY=assemblyai-api-key:latest,GOOGLE_APPLICATION_B64=google-application-b64:latest'
 
   - name: 'gcr.io/cloud-builders/docker'
@@ -83,6 +96,7 @@ steps:
 
 images:
   - 'europe-west1-docker.pkg.dev/$PROJECT_ID/ai-hiring-repo/ai-hiring-tool-backend:$COMMIT_SHA'
+  - 'europe-west1-docker.pkg.dev/$PROJECT_ID/ai-hiring-repo/ai-hiring-tool-worker:$COMMIT_SHA' # Добавляем образ воркера
   - 'europe-west1-docker.pkg.dev/$PROJECT_ID/ai-hiring-repo/ai-hiring-tool-frontend:$COMMIT_SHA'
 
 options:
