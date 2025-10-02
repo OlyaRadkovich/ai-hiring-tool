@@ -10,7 +10,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
-REDIS_URL = os.getenv("REDISURL", "redis://localhost:6379")
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 conn = from_url(REDIS_URL)
 
 LISTEN_QUEUES = ["results", "processing"]
