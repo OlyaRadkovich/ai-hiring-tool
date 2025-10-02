@@ -1,9 +1,8 @@
 #!/bin/bash
+# run_worker.sh
 
+echo "Starting main worker process in background..."
 python -m backend.queue.worker &
 
-python -c "from http.server import BaseHTTPRequestHandler, HTTPServer; \
-class handler(BaseHTTPRequestHandler): \
-    def do_GET(self): \
-        self.send_response(200); self.end_headers(); self.wfile.write(b'OK'); \
-HTTPServer(('', int('${PORT:-8080}')), handler).serve_forever()"
+echo "Starting health check server..."
+python /app/backend/health_check_server.py

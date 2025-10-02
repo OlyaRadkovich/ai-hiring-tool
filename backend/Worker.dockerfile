@@ -5,5 +5,6 @@ COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ ./backend/
 COPY run_worker.sh /app/run_worker.sh
+COPY backend/health_check_server.py /app/backend/health_check_server.py
 RUN chmod +x /app/run_worker.sh
 CMD ["/app/run_worker.sh"]
