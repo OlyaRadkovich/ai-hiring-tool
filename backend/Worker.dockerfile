@@ -4,4 +4,4 @@ WORKDIR /app
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ ./backend/
-CMD ["uvicorn", "backend.worker_main:app", "--host", "0.0.0.0", "--port", "${PORT:-8080}"]
+CMD uvicorn backend.worker_main:app --host 0.0.0.0 --port ${PORT:-8080}
