@@ -1,28 +1,38 @@
-# backend/worker_main.py
-from fastapi import FastAPI, status
-from loguru import logger
-from redis import from_url
-from rq import Worker
 import os
+import time
+from redis import from_url
+from redis.exceptions import ConnectionError
+from rq import Worker, Queue
+from loguru import logger
 
-app = FastAPI()
+listen = ["results_processing"]
 redis_url = os.getenv('REDIS_URL', 'redis://localhost:6379')
-conn = from_url(redis_url)
+conn = None
 
+retry_interval = 5
+max_retries = 12
 
-@app.post("/process", status_code=status.HTTP_202_ACCEPTED)
-def trigger_processing():
-    """
-    Этот эндпоинт принимает 'пинок' и запускает обработку очереди.
-    """
-    logger.info("Получен 'пинок', запускаю обработку очереди...")
+for i in range(max_retries):
     try:
-        listen = ["results_processing"]
-        worker = Worker(queues=listen, connection=conn)
-        worker.work(burst=True)
+        conn = from_url(redis_url)
+        conn.ping()
+        logger.success("Успешное подключение к Redis!")
+        break
+    except ConnectionError as e:
+        logger.warning(f"Не удалось подключиться к Redis: {e}. Попытка {i + 1} из {max_retries}...")
+        if i == max_retries - 1:
+            logger.error("Не удалось подключиться к Redis после нескольких попыток. Воркер останавливается.")
+            exit(1)
+        time.sleep(retry_interval)
 
-        logger.info("Обработка очереди завершена.")
-        return {"message": "Queue processing triggered and completed."}
-    except Exception as e:
-        logger.error(f"Ошибка при обработке очереди: {e}")
-        return {"message": f"Error during queue processing: {e}"}
+
+if __name__ == '__main__':
+    if conn:
+        logger.info(f"Запускаю воркер RQ, который слушает очереди: {listen}")
+        worker = Worker(
+            queues=listen,
+            connection=conn
+        )
+        worker.work(logging_level="INFO")
+    else:
+        logger.error("Соединение с Redis не установлено. Воркер не может быть запущен.")

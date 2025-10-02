@@ -4,5 +4,4 @@ WORKDIR /app
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ ./backend/
-COPY backend/supervisor.conf /etc/supervisor/conf.d/supervisor.conf
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisor.conf"]
+CMD ["uvicorn", "backend.worker_main:app", "--host", "0.0.0.0", "--port", "${PORT:-8080}"]
