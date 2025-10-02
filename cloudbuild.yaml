@@ -20,7 +20,7 @@ steps:
     args:
       - 'build'
       - '-t'
-      - 'europe-west1-docker.pkg.dev/$PROJECT_ID/ai-hiring-repo/ai-hiring-tool-worker:$COMMIT_SHA' # Новое имя образа!
+      - 'europe-west1-docker.pkg.dev/$PROJECT_ID/ai-hiring-repo/ai-hiring-tool-worker:$COMMIT_SHA'
       - '.'
       - '-f'
       - 'backend/Worker.dockerfile'

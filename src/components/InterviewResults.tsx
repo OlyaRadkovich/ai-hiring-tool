@@ -154,7 +154,7 @@ export default function InterviewResults({
     }
 
     // 1. Включаем состояние загрузки и очищаем старые результаты
-    setIsProcessing(true);
+    // setIsProcessing(true);
     updateCache(undefined);
 
     try {
