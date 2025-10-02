@@ -61,6 +61,7 @@ steps:
       - '--no-allow-unauthenticated'
       - '--max-instances=1'
       - '--no-cpu-throttling'
+      - '--no-startup-probe'
       - '--set-secrets=REDIS_URL=REDIS_URL:latest,GOOGLE_API_KEY=google-api-key:latest,ASSEMBLYAI_API_KEY=assemblyai-api-key:latest,GOOGLE_APPLICATION_B64=google-application-b64:latest'
 
   - name: 'gcr.io/cloud-builders/docker'
