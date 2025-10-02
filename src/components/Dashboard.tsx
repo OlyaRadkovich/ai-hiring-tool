@@ -131,31 +131,36 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   };
 
   useEffect(() => {
+    // Не запускаем опрос, если нет ID задачи или процесс не активен
     if (!resultsTaskId || !loadingStatus.results) {
       return;
     }
 
     const intervalId = setInterval(async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/results/${resultsTaskId}/status`);
+        // ИСПРАВЛЕНИЕ №1: Правильный URL для проверки статуса
+        const res = await fetch(`${API_BASE_URL}/api/results/status/${resultsTaskId}`);
+
         if (!res.ok) {
-          throw new Error(`Failed to fetch task status: ${res.statusText}`);
+          throw new Error(`Ошибка при проверке статуса: ${res.statusText}`);
         }
 
-        const data: TaskStatusResponse = await res.json();
+        const data = await res.json();
 
-        if (data.status === "completed") {
+        // ИСПРАВЛЕНИЕ №2: Статус от RQ - 'finished', а не 'completed'
+        if (data.status === "finished") {
           clearInterval(intervalId);
           setLoading("results", false);
           setResultsTaskId(null);
           if (data.result) {
+            // В data.result лежит полный отчет от API
             updateCache("results", data.result);
             toast({
               title: "Успех",
               description: "Анализ видео успешно завершен.",
             });
           } else {
-            throw new Error("Analysis completed, but no result was returned.");
+            throw new Error("Анализ завершен, но результат пустой.");
           }
         } else if (data.status === "failed") {
           clearInterval(intervalId);
@@ -163,10 +168,11 @@ export default function Dashboard({ onLogout }: DashboardProps) {
           setResultsTaskId(null);
           toast({
             title: "Ошибка анализа",
-            description: data.error || "Произошла неизвестная ошибка.",
+            description: data.error || "Произошла неизвестная ошибка в воркере.",
             variant: "destructive",
           });
         }
+        // Если статус 'queued' или 'started', ничего не делаем и ждем следующей проверки
       } catch (error: any) {
         clearInterval(intervalId);
         setLoading("results", false);
@@ -177,8 +183,9 @@ export default function Dashboard({ onLogout }: DashboardProps) {
           variant: "destructive",
         });
       }
-    }, 7000);
+    }, 7000); // Опрос каждые 7 секунд
 
+    // Эта функция очистки выполнится, если компонент будет размонтирован
     return () => clearInterval(intervalId);
   }, [resultsTaskId, loadingStatus.results, API_BASE_URL]);
 

@@ -72,3 +72,8 @@ class TaskResponse(BaseModel):
     message: str
     task_id: str
 
+class JobStatusResponse(BaseModel):
+    job_id: str
+    status: str
+    result: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None

@@ -145,13 +145,17 @@ export default function InterviewResults({
 
   const handleAnalyzeInterview = async () => {
     if (!videoLink) {
-      alert("Пожалуйста, укажите ссылку на видеозапись.");
+      toast({
+        title: "Ошибка валидации",
+        description: "Пожалуйста, укажите ссылку на видеозапись.",
+        variant: "destructive",
+      });
       return;
     }
 
+    // 1. Включаем состояние загрузки и очищаем старые результаты
     setIsProcessing(true);
     updateCache(undefined);
-    let rawResponseText = "";
 
     try {
       const form = new FormData();
@@ -164,35 +168,44 @@ export default function InterviewResults({
       form.append("employee_portrait_link", employeePortraitLink);
       form.append("job_requirements_link", jobRequirementsLink);
 
-        const res = await fetch(`${API_BASE_URL}/api/results/`, {
-            method: "POST",
-            body: form,
-        });
-
-      rawResponseText = await res.text();
+      const res = await fetch(`${API_BASE_URL}/api/results/`, {
+        method: "POST",
+        body: form,
+      });
 
       if (!res.ok) {
-        try {
-          const errorData = JSON.parse(rawResponseText);
-          throw new Error(errorData.detail || "Analyze failed");
-        } catch {
-          throw new Error(
-            rawResponseText || `Server returned status ${res.status}`
-          );
-        }
+        const errorData = await res.json();
+        throw new Error(errorData.detail || "Не удалось запустить анализ");
       }
 
-      const data = JSON.parse(rawResponseText);
-      updateCache(data);
+      // 2. Получаем job_id из ответа API
+      const job = await res.json();
+      const { job_id } = job;
+      
+      if (!job_id) {
+        throw new Error("API не вернул ID задачи (job_id).");
+      }
+
+      // 3. ПЕРЕДАЕМ ID ЗАДАЧИ НАВЕРХ в Dashboard.tsx, чтобы он начал опрос
+      startAnalysisTask(job_id);
+
+      toast({
+        title: "Задача принята",
+        description: "Анализ запущен в фоновом режиме. Результат появится автоматически.",
+      });
+
     } catch (err: any) {
-      console.error("Ошибка обработки ответа от сервера:", err);
-      console.error("Сырой ответ от сервера (Raw response):", rawResponseText);
-      alert(
-        `Произошла ошибка: ${err.message}. Подробности смотрите в консоли разработчика (F12).`
-      );
-    } finally {
+      console.error("Ошибка при запуске анализа:", err);
+      toast({
+        title: "Ошибка",
+        description: `Не удалось запустить анализ: ${err.message}`,
+        variant: "destructive",
+      });
+      // Если запустить не удалось, выключаем загрузку
       setIsProcessing(false);
     }
+    // `finally` блок нам больше не нужен, т.к. состояние загрузки
+    // теперь контролируется из Dashboard.tsx
   };
 
   const handleExportPdf = async () => {
