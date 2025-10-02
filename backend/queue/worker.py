@@ -1,10 +1,9 @@
 import os
 import time
-
-from loguru import logger
 from redis import from_url
 from redis.exceptions import ConnectionError
-from rq import Worker
+from rq import Worker, Queue
+from loguru import logger
 
 listen = ["results_processing"]
 redis_url = os.getenv('REDIS_URL', 'redis://localhost:6379')

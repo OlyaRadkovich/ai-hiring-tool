@@ -45,6 +45,7 @@ steps:
       - '--allow-unauthenticated'
       - '--memory=2Gi'
       - '--set-secrets=REDIS_URL=REDIS_URL:latest,GOOGLE_API_KEY=google-api-key:latest,ASSEMBLYAI_API_KEY=assemblyai-api-key:latest,GOOGLE_APPLICATION_B64=google-application-b64:latest'
+      - '--set-env-vars=WORKER_URL=https://ai-hiring-tool-worker-1053066596162.europe-west1.run.app'
 
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     id: 'Deploy Worker Service'
@@ -58,7 +59,7 @@ steps:
       - '--platform=managed'
       - '--service-account=ai-hiring-tool@qa-assistant-452611.iam.gserviceaccount.com'
       - '--memory=2Gi'
-      - '--no-allow-unauthenticated'
+      - '--allow-unauthenticated' #todo fix
       - '--max-instances=1'
       - '--no-cpu-throttling'
       - '--set-secrets=REDIS_URL=REDIS_URL:latest,GOOGLE_API_KEY=google-api-key:latest,ASSEMBLYAI_API_KEY=assemblyai-api-key:latest,GOOGLE_APPLICATION_B64=google-application-b64:latest'
@@ -96,7 +97,7 @@ steps:
 
 images:
   - 'europe-west1-docker.pkg.dev/$PROJECT_ID/ai-hiring-repo/ai-hiring-tool-backend:$COMMIT_SHA'
-  - 'europe-west1-docker.pkg.dev/$PROJECT_ID/ai-hiring-repo/ai-hiring-tool-worker:$COMMIT_SHA' # Добавляем образ воркера
+  - 'europe-west1-docker.pkg.dev/$PROJECT_ID/ai-hiring-repo/ai-hiring-tool-worker:$COMMIT_SHA'
   - 'europe-west1-docker.pkg.dev/$PROJECT_ID/ai-hiring-repo/ai-hiring-tool-frontend:$COMMIT_SHA'
 
 options:
