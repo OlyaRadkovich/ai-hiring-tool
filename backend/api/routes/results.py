@@ -1,8 +1,4 @@
-import os
-import httpx
 from typing import Optional
-from google.oauth2 import id_token
-from google.auth.transport.requests import Request
 
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, status
 from loguru import logger
@@ -58,32 +54,6 @@ async def create_analysis_task(
             job_timeout="2h"
         )
         logger.info(f"Задача {job.id} добавлена в очередь.")
-
-        # --- НАЧАЛО БЛОКА 'ПИНКА' ДЛЯ ВОРКЕРА ---
-        try:
-            worker_url = os.getenv("WORKER_URL")
-            if worker_url:
-                logger.info(f"Отправка 'пинка' воркеру по адресу: {worker_url}")
-
-                # Получаем аутентификационный токен для безопасного вызова другого сервиса Cloud Run
-                auth_req = Request()
-                identity_token = id_token.fetch_id_token(auth_req, worker_url)
-                headers = {"Authorization": f"Bearer {identity_token}"}
-
-                async with httpx.AsyncClient() as client:
-                    # Отправляем POST-запрос на специальный эндпоинт воркера, например, /process
-                    # Таймаут в 5 секунд, чтобы не задерживать ответ пользователю
-                    response = await client.post(f"{worker_url}/process", headers=headers, timeout=5.0)
-                    logger.info(f"'Пинок' воркеру отправлен. Статус ответа воркера: {response.status_code}")
-            else:
-                logger.warning("Переменная окружения WORKER_URL не установлена. 'Пинок' не отправлен.")
-
-        except Exception as e:
-            # Ошибку 'пинка' только логируем, но не проваливаем основной запрос,
-            # так как задача уже успешно добавлена в очередь.
-            logger.error(f"Не удалось отправить 'пинок' воркеру: {e}", exc_info=True)
-        # --- КОНЕЦ БЛОКА 'ПИНКА' ---
-
         return JobStatusResponse(job_id=job.id, status=job.get_status())
 
     except Exception as e:
