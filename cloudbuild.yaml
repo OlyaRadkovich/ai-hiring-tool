@@ -23,7 +23,7 @@ steps:
       - 'europe-west1-docker.pkg.dev/$PROJECT_ID/ai-hiring-repo/ai-hiring-tool-worker:$COMMIT_SHA' # Новое имя образа!
       - '.'
       - '-f'
-      - 'Worker.dockerfile'
+      - 'backend/Worker.dockerfile'
 
   - name: 'gcr.io/cloud-builders/docker'
     id: 'Push Worker Image'
