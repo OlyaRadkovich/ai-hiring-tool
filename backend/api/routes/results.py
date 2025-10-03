@@ -1,3 +1,5 @@
+import os
+import httpx
 from typing import Optional
 
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, status
@@ -54,6 +56,21 @@ async def create_analysis_task(
             job_timeout="2h"
         )
         logger.info(f"Задача {job.id} добавлена в очередь.")
+
+        try:
+            worker_url = os.getenv("WORKER_URL")
+            if worker_url:
+                logger.info(f"Отправка 'пинка' воркеру по адресу: {worker_url}")
+
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(f"{worker_url}/process", timeout=10.0)
+                    logger.info(f"'Пинок' воркеру отправлен. Статус ответа воркера: {response.status_code}")
+            else:
+                logger.warning("Переменная окружения WORKER_URL не установлена. 'Пинок' не отправлен.")
+
+        except Exception as e:
+            logger.error(f"Не удалось отправить 'пинок' воркеру: {e}", exc_info=True)
+
         return JobStatusResponse(job_id=job.id, status=job.get_status())
 
     except Exception as e:

@@ -116,7 +116,6 @@ export default function Dashboard({onLogout}: DashboardProps) {
     const [resultsTaskId, setResultsTaskId] = useState<string | null>(null);
     const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
-    // --- Вспомогательные функции (без изменений) ---
     const updateCache = (tab: "preparation" | "results", data: any) => {
         setCache((prevCache) => ({...prevCache, [tab]: data}));
     };
@@ -125,14 +124,11 @@ export default function Dashboard({onLogout}: DashboardProps) {
         setLoadingStatus((prevStatus) => ({...prevStatus, [tab]: status}));
     };
 
-    // --- ИСПРАВЛЕННАЯ ЛОГИКА ОПРОСА СТАТУСА ---
     useEffect(() => {
-        // 1. Не запускаем опрос, если нет ID задачи.
         if (!resultsTaskId) {
             return;
         }
 
-        // 2. Включаем состояние загрузки, как только получили ID.
         setLoading("results", true);
 
         const intervalId = setInterval(async () => {
@@ -140,28 +136,23 @@ export default function Dashboard({onLogout}: DashboardProps) {
                 const res = await fetch(`${API_BASE_URL}/api/results/status/${resultsTaskId}`);
 
                 if (!res.ok) {
-                    // Если API вернул ошибку (404, 500), останавливаем опрос
                     throw new Error(`Ошибка при проверке статуса: ${res.statusText}`);
                 }
 
                 const data = await res.json();
 
-                // 3. Статус от RQ для успешной задачи - 'finished'
                 if (data.status === "finished") {
                     clearInterval(intervalId);
                     setLoading("results", false);
-                    setResultsTaskId(null); // Сбрасываем ID задачи
+                    setResultsTaskId(null);
 
-                    // Убедимся, что результат не пустой
                     if (data.result) {
-                        // В data.result лежит полный отчет, его и сохраняем
                         updateCache("results", data.result);
                         toast({
                             title: "Успех",
                             description: "Анализ результатов успешно завершен.",
                         });
                     } else {
-                        // Редкий случай, когда задача завершена, но результат пуст
                         throw new Error("Анализ завершен, но результат пустой.");
                     }
                 } else if (data.status === "failed") {
@@ -174,7 +165,6 @@ export default function Dashboard({onLogout}: DashboardProps) {
                         variant: "destructive",
                     });
                 }
-                // Если статус 'queued' или 'started', ничего не делаем и ждем следующей проверки.
 
             } catch (error: any) {
                 clearInterval(intervalId);
@@ -186,14 +176,12 @@ export default function Dashboard({onLogout}: DashboardProps) {
                     variant: "destructive",
                 });
             }
-        }, 7000); // Опрашиваем каждые 7 секунд
+        }, 60000);
 
-        // Функция очистки для остановки интервала, если пользователь уйдет со страницы
         return () => clearInterval(intervalId);
 
-    }, [API_BASE_URL, resultsTaskId]); // Этот хук будет перезапускаться только при изменении ID задачи
+    }, [API_BASE_URL, resultsTaskId]);
 
-    // --- JSX (без существенных изменений) ---
     return (
         <div className="min-h-screen bg-gradient-subtle">
             <header className="border-b bg-card/95 backdrop-blur-sm sticky top-0 z-50">

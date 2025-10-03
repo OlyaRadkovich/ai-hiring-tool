@@ -1,9 +1,7 @@
 import os
-
+import subprocess
 from fastapi import FastAPI, status
 from loguru import logger
-from redis import from_url
-from rq import Worker
 
 app = FastAPI(
     title="AI Hiring Tool - On-Demand Worker",
@@ -11,30 +9,32 @@ app = FastAPI(
     version="1.0.0"
 )
 
-redis_url = os.getenv('REDIS_URL', 'redis://localhost:6379')
-conn = from_url(redis_url)
+redis_url = os.getenv('REDIS_URL')
 listen_queues = ["results_processing"]
 
 
 @app.post("/process", status_code=status.HTTP_202_ACCEPTED)
 def trigger_processing():
     """
-    Этот эндпоинт принимает 'пинок' от основного бэкенда
-    и запускает обработку очереди в режиме 'burst'.
+    Этот эндпоинт принимает 'пинок' и запускает обработку очереди в отдельном процессе.
     """
-    logger.info("Получен триггер, запускаю обработку очереди...")
-    if not conn:
-        logger.error("Нет подключения к Redis. Обработка невозможна.")
-        return {"status": "error", "detail": "Redis connection not available"}
+    logger.info("Получен триггер, запускаю обработку очереди в отдельном процессе...")
+    if not redis_url:
+        logger.error("Нет REDIS_URL. Обработка невозможна.")
+        return {"status": "error", "detail": "Redis URL not configured"}
 
     try:
-        worker = Worker(queues=listen_queues, connection=conn)
+        command = [
+            "rq", "worker",
+            "--burst",
+            "--url", redis_url,
+            *listen_queues
+        ]
+        subprocess.Popen(command)
 
-        did_process_anything = worker.work(burst=True)
-
-        logger.info(f"Обработка очереди завершена. Были ли обработаны задачи: {did_process_anything}")
-        return {"status": "ok", "processed": did_process_anything}
+        logger.info("Процесс обработки очереди успешно запущен в фоне.")
+        return {"status": "ok", "detail": "Processing started in background."}
 
     except Exception as e:
-        logger.error(f"Ошибка при обработке очереди: {e}", exc_info=True)
+        logger.error(f"Ошибка при запуске дочернего процесса воркера: {e}", exc_info=True)
         return {"status": "error", "detail": str(e)}
