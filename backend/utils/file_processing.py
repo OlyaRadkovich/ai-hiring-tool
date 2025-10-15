@@ -3,8 +3,11 @@ import re
 import asyncio
 import tempfile
 import os
+import time
+
 from loguru import logger
 
+from assemblyai import api
 from pypdf import PdfReader
 import docx
 import assemblyai as aai
@@ -108,46 +111,90 @@ def read_file_content(file: io.BytesIO, filename: str) -> str:
 
 async def transcribe_audio_assemblyai(audio_path: str) -> str:
     """
-    Transcribes an audio file from the specified path using a correctly configured client.
+    Transcribes an audio file with enhanced logging, using the correct low-level API
+    functions and public properties.
     """
-    logger.info(f"Starting audio transcription ({audio_path}) via AssemblyAI...")
+    logger.info(f"Starting audio transcription process for file: {audio_path}")
 
+    # --- Проверка файла ---
     try:
         if not os.path.exists(audio_path):
-            logger.error(f"File not found at the provided path: {audio_path}")
             raise FileNotFoundError(f"Audio file for transcription not found at {audio_path}")
-
         file_size_mb = os.path.getsize(audio_path) / (1024 * 1024)
         logger.info(f"Source file found. Size: {file_size_mb:.2f} MB.")
-        if file_size_mb == 0:
-            logger.warning(f"Source file at {audio_path} is empty (0 bytes).")
     except Exception as e:
-        logger.error(f"Failed to access or check source file at {audio_path}: {e}")
+        logger.error(f"Failed to access source file at {audio_path}: {e}")
         raise
 
+    # --- Настройка клиента ---
     custom_settings = AssemblyAISettings(http_timeout=900.0)
     api_client = AssemblyAIClient(settings=custom_settings)
-
     transcriber = aai.Transcriber(client=api_client)
+    config = aai.TranscriptionConfig(language_detection=True)
 
-    def sync_transcribe_task():
-        logger.info("Running synchronous transcription task in a separate thread...")
-        config = aai.TranscriptionConfig(language_detection=True)
-        return transcriber.transcribe(audio_path, config=config)
+    submitted_transcript = None
+    try:
+        # --- ЭТАП 1: Отправка файла ---
+        def sync_submit_task():
+            logger.info("Step 1/2: Submitting file to AssemblyAI...")
+            # submit() возвращает полноценный объект Transcript
+            return transcriber.submit(audio_path, config=config)
 
-    logger.info("Submitting file to AssemblyAI API for transcription...")
-    transcript = await asyncio.to_thread(sync_transcribe_task)
+        submitted_transcript = await asyncio.to_thread(sync_submit_task)
+        # ИСПОЛЬЗУЕМ ПУБЛИЧНЫЕ СВОЙСТВА .id и .status
+        logger.success(
+            f"Step 1/2: File submitted. Job ID: {submitted_transcript.id}. Status: {submitted_transcript.status}")
 
-    if transcript.status == aai.TranscriptStatus.error:
-        logger.error(f"AssemblyAI transcription error: {transcript.error}")
-        raise ValueError(f"Transcription failed: {transcript.error}")
+        # --- ЭТАП 2: Опрос статуса в цикле ---
+        def sync_poll_task():
+            logger.info("Step 2/2: Polling for transcription result...")
+            polling_interval = 20  # seconds
 
-    logger.success("AssemblyAI transcription completed successfully.")
+            while True:
+                # Используем ID из публичного свойства .id
+                current_transcript_response = api.get_transcript(
+                    api_client.http_client,
+                    submitted_transcript.id
+                )
 
-    if not transcript.text:
-        logger.warning("Transcription returned empty text.")
+                status = current_transcript_response.status
+                logger.info(f"Polling... Current job status: {status.value}")
 
-    return transcript.text or ""
+                if status in [aai.TranscriptStatus.completed, aai.TranscriptStatus.error]:
+                    logger.info(f"Polling finished with status '{status.value}'.")
+                    return current_transcript_response
+
+                time.sleep(polling_interval)
+
+        final_transcript_response = await asyncio.to_thread(sync_poll_task)
+
+        if final_transcript_response.status == aai.TranscriptStatus.error:
+            raise ValueError(f"Transcription failed: {final_transcript_response.error}")
+
+        logger.success("Step 2/2: AssemblyAI transcription completed successfully.")
+
+        if not final_transcript_response.text:
+            logger.warning("Transcription returned empty text.")
+
+        return final_transcript_response.text or ""
+
+    except Exception as e:
+        logger.error(f"An error occurred during the transcription process: {e}", exc_info=True)
+        if submitted_transcript:
+            try:
+                def sync_delete_task():
+                    logger.warning(f"Attempting to delete failed transcription job {submitted_transcript.id}...")
+                    # Используем ID из публичного свойства .id
+                    api.delete_transcript(
+                        api_client.http_client,
+                        submitted_transcript.id
+                    )
+
+                await asyncio.to_thread(sync_delete_task)
+                logger.success("Failed job deleted successfully.")
+            except Exception as delete_e:
+                logger.error(f"Could not delete failed job {submitted_transcript.id}: {delete_e}")
+        raise
 
 
 def extract_json_from_string(text: str) -> str:

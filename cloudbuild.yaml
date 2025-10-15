@@ -15,20 +15,54 @@ steps:
       - 'push'
       - 'europe-west1-docker.pkg.dev/$PROJECT_ID/ai-hiring-repo/ai-hiring-tool-backend:$COMMIT_SHA'
 
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'Build Worker Image'
+    args:
+      - 'build'
+      - '-t'
+      - 'europe-west1-docker.pkg.dev/$PROJECT_ID/ai-hiring-repo/ai-hiring-tool-worker:$COMMIT_SHA'
+      - '.'
+      - '-f'
+      - 'backend/Worker.dockerfile'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'Push Worker Image'
+    args:
+      - 'push'
+      - 'europe-west1-docker.pkg.dev/$PROJECT_ID/ai-hiring-repo/ai-hiring-tool-worker:$COMMIT_SHA'
+
   - name: 'gcr.io/cloud-builders/gcloud'
-    id: 'Deploy Backend'
+    id: 'Deploy API Service'
     args:
       - 'run'
       - 'deploy'
       - 'ai-hiring-tool-backend'
       - '--image=europe-west1-docker.pkg.dev/$PROJECT_ID/ai-hiring-repo/ai-hiring-tool-backend:$COMMIT_SHA'
       - '--region=europe-west1'
-      - '--service-account=ai-hiring-tool@qa-assistant-452611.iam.gserviceaccount.com'
       - '--platform=managed'
+      - '--service-account=ai-hiring-tool@qa-assistant-452611.iam.gserviceaccount.com'
       - '--port=8000'
       - '--allow-unauthenticated'
       - '--memory=2Gi'
-      - '--set-secrets=GOOGLE_API_KEY=google-api-key:latest,ASSEMBLYAI_API_KEY=assemblyai-api-key:latest,GOOGLE_APPLICATION_B64=google-application-b64:latest'
+      - '--set-secrets=REDIS_URL=REDIS_URL:latest,GOOGLE_API_KEY=google-api-key:latest,ASSEMBLYAI_API_KEY=assemblyai-api-key:latest,GOOGLE_APPLICATION_B64=google-application-b64:latest'
+      - '--set-env-vars=WORKER_URL=https://ai-hiring-tool-worker-1053066596162.europe-west1.run.app'
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'Deploy Worker Service'
+    args:
+      - 'gcloud'
+      - 'run'
+      - 'deploy'
+      - 'ai-hiring-tool-worker'
+      - '--image=europe-west1-docker.pkg.dev/$PROJECT_ID/ai-hiring-repo/ai-hiring-tool-worker:$COMMIT_SHA'
+      - '--region=europe-west1'
+      - '--platform=managed'
+      - '--service-account=ai-hiring-tool@qa-assistant-452611.iam.gserviceaccount.com'
+      - '--memory=2Gi'
+      - '--allow-unauthenticated' #todo fix
+      - '--max-instances=1'
+      - '--no-cpu-throttling'
+      - '--set-secrets=REDIS_URL=REDIS_URL:latest,GOOGLE_API_KEY=google-api-key:latest,ASSEMBLYAI_API_KEY=assemblyai-api-key:latest,GOOGLE_APPLICATION_B64=google-application-b64:latest'
 
   - name: 'gcr.io/cloud-builders/docker'
     id: 'Build Frontend Image'
@@ -63,6 +97,7 @@ steps:
 
 images:
   - 'europe-west1-docker.pkg.dev/$PROJECT_ID/ai-hiring-repo/ai-hiring-tool-backend:$COMMIT_SHA'
+  - 'europe-west1-docker.pkg.dev/$PROJECT_ID/ai-hiring-repo/ai-hiring-tool-worker:$COMMIT_SHA'
   - 'europe-west1-docker.pkg.dev/$PROJECT_ID/ai-hiring-repo/ai-hiring-tool-frontend:$COMMIT_SHA'
 
 options:

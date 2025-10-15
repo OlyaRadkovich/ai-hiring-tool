@@ -1,9 +1,9 @@
 services:
-  backend:
+  api:
     build:
       context: .
       dockerfile: backend/Dockerfile
-    container_name: ai_hiring_backend
+    container_name: api_producer
     ports:
       - "8000:8000"
     env_file:
@@ -11,6 +11,30 @@ services:
     volumes:
       - ./gcp-credentials.json:/app/gcp-credentials.json
       - ./backend:/app/backend
+    depends_on:
+      - redis
+
+  worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: worker_consumer
+    command: python -m backend.queue.worker
+    env_file:
+      - .env
+    volumes:
+      - ./gcp-credentials.json:/app/gcp-credentials.json
+      - ./backend:/app/backend
+    depends_on:
+      - redis
+    deploy:
+      replicas: 1
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis_broker
+    ports:
+      - "6379:6379"
 
   frontend:
     build:

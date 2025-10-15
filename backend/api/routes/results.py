@@ -1,12 +1,13 @@
-import io
+import os
+import httpx
 from typing import Optional
-from fastapi import APIRouter, UploadFile, File, Form, status, HTTPException, Depends
-from google.genai.errors import ServerError
+
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, status
 from loguru import logger
-from backend.api.models import ResultsAnalysis, ErrorResponse
-from backend.services.analysis_service import AnalysisService
-from backend.api.deps import get_analysis_service
-from googleapiclient.errors import HttpError
+from rq import Queue
+
+from backend.api.deps import get_results_queue
+from backend.api.models import ErrorResponse, JobStatusResponse
 from backend.utils.validators import FileValidator
 
 router = APIRouter()
@@ -14,76 +15,108 @@ router = APIRouter()
 
 @router.post(
     "/",
-    response_model=ResultsAnalysis,
+    response_model=JobStatusResponse,
+    status_code=status.HTTP_202_ACCEPTED,
     responses={
         400: {"model": ErrorResponse},
-        403: {"model": ErrorResponse},
-        404: {"model": ErrorResponse},
         500: {"model": ErrorResponse},
     },
-    summary="Анализ результатов интервью",
-    description="Принимает полный набор данных для генерации развернутого фидбэка по кандидату."
+    summary="Запустить анализ результатов интервью",
+    description="Принимает данные для анализа, ставит задачу в очередь и немедленно возвращает ее ID."
 )
-async def analyze_results_endpoint(
+async def create_analysis_task(
         cv_file: Optional[UploadFile] = File(None, description="Резюме кандидата (.pdf, .docx, .txt)."),
         video_link: str = Form(..., description="Ссылка на видеозапись собеседования."),
         competency_matrix_link: str = Form(..., description="Ссылка на матрицу компетенций QA/AQA."),
         department_values_link: str = Form(..., description="Ссылка на ценности департамента."),
         employee_portrait_link: str = Form(..., description="Ссылка на портрет сотрудника."),
         job_requirements_link: str = Form(..., description="Ссылка на требования к вакансии."),
-        analysis_service: AnalysisService = Depends(get_analysis_service)
+        queue: Queue = Depends(get_results_queue)
 ):
     """
-    Эндпоинт для анализа результатов интервью.
-    Принимает CV (опционально), ссылку на видео и ссылки на документы с требованиями.
+    Эндпоинт для постановки задачи анализа результатов интервью в очередь.
     """
+    if cv_file:
+        FileValidator.validate_cv_file_results(cv_file)
+
+    cv_bytes: Optional[bytes] = await cv_file.read() if cv_file and cv_file.file else None
+    cv_filename: Optional[str] = cv_file.filename if cv_file else None
+
+    logger.info("Постановка задачи на анализ в очередь...")
     try:
-
-        if cv_file:
-            FileValidator.validate_cv_file_results(cv_file)
-
-        cv_file_content = io.BytesIO(cv_file.file.read()) if cv_file and cv_file.file else None
-
-        analysis_result = await analysis_service.analyze_results(
-            cv_file=cv_file_content,
-            cv_filename=cv_file.filename if cv_file else None,
+        job = queue.enqueue(
+            "backend.queue.tasks.run_analysis_pipeline",
+            cv_bytes=cv_bytes,
+            cv_filename=cv_filename,
             video_link=video_link,
             competency_matrix_link=competency_matrix_link,
             department_values_link=department_values_link,
             employee_portrait_link=employee_portrait_link,
-            job_requirements_link=job_requirements_link
+            job_requirements_link=job_requirements_link,
+            job_timeout="2h"
         )
-        return analysis_result
+        logger.info(f"Задача {job.id} добавлена в очередь.")
 
-    except HttpError as he:
-        sa_email = "не удалось определить"
-        if analysis_service.drive_service:
-            sa_email = analysis_service.drive_service.credentials.service_account_email
+        try:
+            worker_url = os.getenv("WORKER_URL")
+            if worker_url:
+                logger.info(f"Отправка 'пинка' воркеру по адресу: {worker_url}")
 
-        logger.error(f"Получена ошибка Google API: Status={he.status_code}, Reason={he.reason}")
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(f"{worker_url}/process", timeout=10.0)
+                    logger.info(f"'Пинок' воркеру отправлен. Статус ответа воркера: {response.status_code}")
+            else:
+                logger.warning("Переменная окружения WORKER_URL не установлена. 'Пинок' не отправлен.")
 
-        detail_message = f"Ошибка Google API: {he.reason}. " \
-                         f"Убедитесь, что вы предоставили доступ к файлу для сервисного аккаунта с email: {sa_email}"
+        except Exception as e:
+            logger.error(f"Не удалось отправить 'пинок' воркеру: {e}", exc_info=True)
 
-        raise HTTPException(
-            status_code=he.status_code or 400,
-            detail=detail_message
-        )
-    except ValueError as ve:
-        logger.error(f"Ошибка значения в пайплайне: {ve}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(ve)
-        )
-    except ServerError as e:
-        logger.warning(f"Сервер Google перегружен: {e.message}. Попробуйте позже.")
-        raise HTTPException(
-            status_code=503,
-            detail="AI-модель временно перегружена. Пожалуйста, повторите попытку через несколько минут."
-        )
+        return JobStatusResponse(job_id=job.id, status=job.get_status())
+
     except Exception as e:
-        logger.error(f"Произошла непредвиденная ошибка: {e}", exc_info=True)
+        logger.error(f"Не удалось поставить задачу в очередь: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Произошла внутренняя ошибка сервера: {e}"
+            detail="Не удалось поставить задачу в очередь из-за внутренней ошибки."
         )
+
+
+@router.get(
+    "/status/{job_id}",
+    response_model=JobStatusResponse,
+    responses={
+        404: {"model": ErrorResponse},
+    },
+    summary="Проверить статус задачи анализа",
+    description="Возвращает текущий статус задачи и результат, если она успешно завершена."
+)
+def get_analysis_status(job_id: str, queue: Queue = Depends(get_results_queue)):
+    """
+    Проверяет статус задачи по ее ID.
+    """
+    logger.info(f"Проверка статуса для задачи {job_id}")
+    job = queue.fetch_job(job_id)
+
+    if job is None:
+        logger.warning(f"Попытка проверить статус для несуществующей задачи с ID {job_id}")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Задача с ID {job_id} не найдена.")
+
+    job_status = job.get_status()
+    logger.info(f"Проверка статуса для задачи {job_id}. Текущий статус: {job_status}")
+
+    response_data = {"job_id": job.id, "status": job_status}
+
+    if job_status == 'finished':
+        logger.success(f"Задача {job_id} успешно завершена. Отправляем результат клиенту.")
+        result = job.result
+        if hasattr(result, 'model_dump'):
+            response_data["result"] = result.model_dump()
+        else:
+            response_data["result"] = result
+
+    elif job_status == 'failed':
+        logger.error(f"Задача {job_id} провалена. Отправляем ошибку клиенту.")
+        error_message = job.exc_info.strip().split('\n')[-1] if job.exc_info else "Неизвестная ошибка в воркере."
+        response_data["error"] = error_message
+
+    return JobStatusResponse(**response_data)
